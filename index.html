@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1D9E75">
+<title>Mind on Health · Staff Roster</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 20 Q35 30 35 50 Q35 65 50 75 Q65 65 65 50 Q65 30 50 20 Z' fill='%231D9E75'/%3E%3Ccircle cx='50' cy='55' r='8' fill='%23378ADD'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f7f7f5;
+  --bg-card: #ffffff;
+  --bg-secondary: #f1efe8;
+  --text: #1a1a1a;
+  --text-muted: #6b6b6b;
+  --text-faint: #999999;
+  --border: rgba(0,0,0,0.12);
+  --accent: #1D9E75;
+  --accent-dark: #0F6E56;
+  --accent-light: #E1F5EE;
+  --danger: #A32D2D;
+  --danger-light: #FCEBEB;
+  --warning-light: #FAEEDA;
+  --warning-dark: #854F0B;
+  --info-light: #E6F1FB;
+  --info-dark: #0C447C;
+  --purple-light: #EEEDFE;
+  --purple-dark: #3C3489;
+  --coral-light: #FAECE7;
+  --coral-dark: #993C1D;
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+.container { max-width: 1100px; margin: 0 auto; padding: 16px 20px 40px; }
+header { display: flex; align-items: center; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.logo { width: 44px; height: 44px; flex-shrink: 0; }
+.brand-title { font-size: 17px; font-weight: 600; margin: 0; }
+.brand-sub { font-size: 13px; color: var(--text-muted); margin: 0; }
+.spacer { flex: 1; }
+.userbox { font-size: 13px; color: var(--text-muted); text-align: right; }
+.userbox b { color: var(--text); font-weight: 600; display: block; }
+.userbox a { color: var(--accent); text-decoration: none; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; overflow-x: auto; }
+.tab { padding: 10px 14px; cursor: pointer; font-size: 14px; color: var(--text-muted); border: none; background: transparent; border-bottom: 2px solid transparent; white-space: nowrap; font-family: inherit; }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.tab:hover:not(.active) { color: var(--text); }
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; margin-bottom: 16px; }
+.card-title { font-size: 16px; font-weight: 600; margin: 0 0 14px; }
+.roster-grid { display: grid; grid-template-columns: 120px repeat(3, 1fr); gap: 8px; min-width: 580px; }
+.r-cell { background: var(--bg-secondary); border-radius: var(--radius); padding: 10px 12px; font-size: 13px; min-height: 56px; display: flex; flex-direction: column; justify-content: center; }
+.r-head { background: transparent; font-weight: 600; min-height: 36px; }
+.r-day { background: transparent; font-weight: 600; font-size: 13px; color: var(--text-muted); }
+.r-cell select { width: 100%; font-size: 13px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; background: white; font-family: inherit; color: var(--text); }
+.r-name { font-weight: 600; font-size: 13px; }
+.r-time { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.row { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.label { font-size: 13px; color: var(--text-muted); min-width: 90px; }
+.input, select.input, textarea.input { padding: 8px 10px; font-size: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); color: var(--text); font-family: inherit; outline: none; }
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(29,158,117,0.15); }
+.btn { font-family: inherit; font-size: 14px; padding: 9px 16px; border-radius: var(--radius); cursor: pointer; border: 1px solid var(--border); background: white; color: var(--text); }
+.btn:hover { background: var(--bg-secondary); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: white; border-color: var(--accent); font-weight: 600; }
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-approve { color: var(--accent-dark); border-color: var(--accent); font-size: 13px; padding: 6px 12px; margin-right: 6px; background: white; }
+.btn-approve:hover { background: var(--accent-light); }
+.btn-reject { color: var(--danger); border-color: #E24B4A; font-size: 13px; padding: 6px 12px; background: white; }
+.btn-reject:hover { background: var(--danger-light); }
+.btn-icon { padding: 6px 10px; font-size: 14px; }
+.pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.pill-pending { background: var(--warning-light); color: var(--warning-dark); }
+.pill-approved { background: var(--accent-light); color: var(--accent-dark); }
+.pill-rejected { background: var(--danger-light); color: var(--danger); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th { text-align: left; padding: 8px 6px; font-weight: 600; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.tbl td { padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.tbl input, .tbl select { width: 100%; padding: 6px; font-size: 13px; border: 1px solid var(--border); border-radius: 4px; background: white; font-family: inherit; color: var(--text); }
+.week-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.week-label { font-weight: 600; font-size: 14px; }
+.empty { text-align: center; color: var(--text-muted); font-size: 14px; padding: 30px; }
+.stat { background: var(--bg-secondary); padding: 14px; border-radius: var(--radius); }
+.stat-label { font-size: 12px; color: var(--text-muted); }
+.stat-value { font-size: 22px; font-weight: 600; margin-top: 2px; }
+.loc-pill { display: inline-block; font-size: 11px; padding: 2px 9px; border-radius: 10px; font-weight: 600; }
+.loc-pk { background: var(--info-light); color: var(--info-dark); }
+.loc-ox { background: var(--purple-light); color: var(--purple-dark); }
+.loc-pim { background: var(--coral-light); color: var(--coral-dark); }
+.login-wrap { max-width: 400px; margin: 50px auto; }
+.login-wrap .card { padding: 32px; }
+.flash { padding: 12px 16px; background: var(--accent-light); color: var(--accent-dark); border-radius: var(--radius); margin-bottom: 14px; font-size: 14px; }
+.error { padding: 12px 16px; background: var(--danger-light); color: var(--danger); border-radius: var(--radius); margin-bottom: 14px; font-size: 14px; }
+.loading { text-align: center; padding: 40px; color: var(--text-muted); font-size: 14px; }
+.scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 640px) {
+  .container { padding: 12px 14px 30px; }
+  header { padding: 10px 0; }
+  .brand-title { font-size: 15px; }
+  .brand-sub { font-size: 12px; }
+  .tab { padding: 8px 10px; font-size: 13px; }
+  .label { min-width: 70px; font-size: 12px; }
+  .week-nav { gap: 6px; }
+  .week-label { font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <svg class="logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M50 20 Q35 30 35 50 Q35 65 50 75 Q65 65 65 50 Q65 30 50 20 Z" fill="#1D9E75" opacity="0.85"/>
+      <circle cx="50" cy="55" r="8" fill="#378ADD"/>
+      <path d="M30 70 Q40 60 50 65 Q60 70 70 70" stroke="#378ADD" stroke-width="4" fill="none" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <p class="brand-title">Mind on Health</p>
+      <p class="brand-sub">Staff roster &amp; timesheets</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="userbox" id="userbox"></div>
+  </header>
+  <main id="root"><div class="loading">Loading…</div></main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// =====================================================================
+// CONFIGURATION — REPLACE THESE TWO VALUES AFTER CREATING YOUR SUPABASE PROJECT
+// (Settings → API → Project URL and anon public key)
+// =====================================================================
+const SUPABASE_URL = 'https://qurobfsxfmchmnjpxsqb.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_9x-EQBdr5mzHwV7JtKGLxQ_b8yq9atc';
+// =====================================================================
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const LOCATIONS = ['Parkwood', 'Oxenford', 'Pimpama'];
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+
+// ---- helpers ----
+function getMonday(d){ d = new Date(d); const day = d.getDay(); const diff = d.getDate() - day + (day===0?-6:1); const m = new Date(d.setDate(diff)); m.setHours(0,0,0,0); return m; }
+function fmtDate(d){ return d.toLocaleDateString('en-AU',{day:'2-digit',month:'short'}); }
+function isoDate(d){ const tz = d.getTimezoneOffset()*60000; return new Date(d - tz).toISOString().slice(0,10); }
+function addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; }
+function hoursBetween(start,end,breakMin){
+  if(!start||!end) return 0;
+  const [sh,sm] = start.split(':').map(Number);
+  const [eh,em] = end.split(':').map(Number);
+  const mins = (eh*60+em) - (sh*60+sm) - (breakMin||0);
+  return Math.max(0, Math.round((mins/60)*100)/100);
+}
+function locClass(loc){ return loc==='Parkwood'?'loc-pk':loc==='Oxenford'?'loc-ox':'loc-pim'; }
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+function staffById(id){ return allStaff.find(s=>s.id===id); }
+
+// ---- state ----
+let state = { user:null, profile:null, tab:'roster', weekStart:getMonday(new Date()), flash:null, error:null };
+let allStaff = [];
+const root = document.getElementById('root');
+const userbox = document.getElementById('userbox');
+
+// =====================================================================
+// AUTH + INIT
+// =====================================================================
+async function init(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if (session) await loadSession(session.user);
+  else renderLogin();
+  sb.auth.onAuthStateChange((e,s)=>{ if (e==='SIGNED_OUT'){ state.user=null; state.profile=null; renderLogin(); } });
+}
+
+async function loadSession(user){
+  state.user = user;
+  const { data: profile, error: pe } = await sb.from('staff').select('*').eq('id', user.id).maybeSingle();
+  if (pe || !profile){
+    root.innerHTML = `<div class="card"><p class="card-title">Account not set up</p><p>Your sign-in worked, but no staff profile exists yet. Ask Missy to add you in the Supabase dashboard.</p><button class="btn" onclick="logout()">Sign out</button></div>`;
+    return;
+  }
+  state.profile = profile;
+  const { data: staff } = await sb.from('staff').select('*').order('name');
+  allStaff = staff || [];
+  state.tab = 'roster';
+  render();
+}
+
+async function logout(){
+  await sb.auth.signOut();
+}
+
+// =====================================================================
+// MAIN RENDER
+// =====================================================================
+function render(){
+  if (!state.profile){ renderLogin(); return; }
+  userbox.innerHTML = `<b>${esc(state.profile.name)}</b>${esc(state.profile.role)} · <a href="#" id="logout-link">Logout</a>`;
+  document.getElementById('logout-link').onclick = (e)=>{ e.preventDefault(); logout(); };
+
+  const tabs = [
+    { id:'roster',   label:'Roster' },
+    { id:'hours',    label:'My hours' },
+    { id:'requests', label:'Requests' }
+  ];
+  if (state.profile.is_admin) tabs.push({ id:'admin', label:'Admin' });
+
+  let html = '<div class="tabs">';
+  tabs.forEach(t=>{ html += `<button class="tab ${state.tab===t.id?'active':''}" data-tab="${t.id}">${t.label}</button>`; });
+  html += '</div>';
+  if (state.flash){ html += `<div class="flash">${esc(state.flash)}</div>`; state.flash = null; }
+  if (state.error){ html += `<div class="error">${esc(state.error)}</div>`; state.error = null; }
+  html += '<div id="tab-content"><div class="loading">Loading…</div></div>';
+  root.innerHTML = html;
+  document.querySelectorAll('.tab').forEach(b=> b.onclick = ()=>{ state.tab = b.dataset.tab; render(); });
+
+  if (state.tab==='roster')   renderRoster();
+  else if (state.tab==='hours')    renderHours();
+  else if (state.tab==='requests') renderRequests();
+  else if (state.tab==='admin')    renderAdmin();
+}
+
+// =====================================================================
+// LOGIN
+// =====================================================================
+function renderLogin(){
+  userbox.innerHTML = '';
+  root.innerHTML = `
+    <div class="login-wrap">
+      <div class="card">
+        <p class="card-title">Sign in</p>
+        <p style="color:var(--text-muted); font-size:13px; margin:-8px 0 18px;">Use the email Missy set up for you.</p>
+        <div class="row"><label class="label">Email</label><input id="li-email" class="input" type="email" autocomplete="username" style="flex:1; min-width:180px;"/></div>
+        <div class="row"><label class="label">Password</label><input id="li-pass" class="input" type="password" autocomplete="current-password" style="flex:1; min-width:180px;"/></div>
+        <div id="li-err" style="color:var(--danger); font-size:13px; margin:6px 0 12px; min-height:18px;"></div>
+        <button class="btn btn-primary" id="li-btn" style="width:100%;">Sign in</button>
+        <p style="font-size:12px; color:var(--text-faint); margin-top:18px; text-align:center;">Forgot your password? Ask Missy to reset it in Supabase.</p>
+      </div>
+    </div>`;
+  const btn = document.getElementById('li-btn');
+  const submit = async ()=>{
+    const email = document.getElementById('li-email').value.trim();
+    const pass  = document.getElementById('li-pass').value;
+    const err = document.getElementById('li-err');
+    err.textContent = '';
+    if (!email || !pass){ err.textContent = 'Email and password required.'; return; }
+    btn.disabled = true; btn.textContent = 'Signing in…';
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+    btn.disabled = false; btn.textContent = 'Sign in';
+    if (error){ err.textContent = error.message; return; }
+    await loadSession(data.user);
+  };
+  btn.onclick = submit;
+  document.getElementById('li-pass').onkeydown = (e)=>{ if (e.key==='Enter') submit(); };
+}
+
+// =====================================================================
+// ROSTER TAB
+// =====================================================================
+async function renderRoster(){
+  const tc = document.getElementById('tab-content');
+  const weekKey = isoDate(state.weekStart);
+  const { data: rows, error } = await sb.from('roster').select('*').eq('week_start', weekKey);
+  if (error){ tc.innerHTML = `<div class="error">Could not load roster: ${esc(error.message)}</div>`; return; }
+  const map = {};
+  DAYS.forEach(d=>{ map[d]={}; LOCATIONS.forEach(l=>{ map[d][l]=null; }); });
+  rows.forEach(r=>{ if(map[r.day_of_week]) map[r.day_of_week][r.location] = r.staff_id; });
+
+  const endDate = addDays(state.weekStart, 4);
+  let html = `<div class="week-nav">
+    <button class="btn btn-icon" id="prev-wk">‹</button>
+    <span class="week-label">Week of ${fmtDate(state.weekStart)} – ${fmtDate(endDate)}</span>
+    <button class="btn btn-icon" id="next-wk">›</button>
+    <button class="btn" id="this-wk" style="margin-left:auto;">This week</button>
+  </div>`;
+  html += `<div class="card scroll-x"><div class="roster-grid">
+    <div class="r-cell r-head"></div>
+    <div class="r-cell r-head"><span class="loc-pill loc-pk">Parkwood</span></div>
+    <div class="r-cell r-head"><span class="loc-pill loc-ox">Oxenford</span></div>
+    <div class="r-cell r-head"><span class="loc-pill loc-pim">Pimpama</span></div>`;
+  DAYS.forEach((day,i)=>{
+    const date = addDays(state.weekStart, i);
+    html += `<div class="r-cell r-day">${day}<br><span style="font-size:11px; font-weight:400;">${fmtDate(date)}</span></div>`;
+    LOCATIONS.forEach(loc=>{
+      const sid = map[day][loc];
+      if (state.profile.is_admin){
+        let opts = '<option value="">— empty —</option>';
+        allStaff.filter(s=>!s.is_admin).forEach(s=>{ opts += `<option value="${s.id}" ${sid===s.id?'selected':''}>${esc(s.name.split(' ')[0])}</option>`; });
+        html += `<div class="r-cell"><select data-day="${day}" data-loc="${loc}" class="r-edit">${opts}</select></div>`;
+      } else {
+        const s = sid? staffById(sid): null;
+        html += `<div class="r-cell"><div class="r-name">${s? esc(s.name.split(' ')[0]):'—'}</div><div class="r-time">${s?'08:30 – 17:00':''}</div></div>`;
+      }
+    });
+  });
+  html += `</div>`;
+  if (state.profile.is_admin) html += `<p style="font-size:12px; color:var(--text-muted); margin-top:14px;">Changes save automatically.</p>`;
+  html += `</div>`;
+  tc.innerHTML = html;
+
+  document.getElementById('prev-wk').onclick = ()=>{ state.weekStart = addDays(state.weekStart,-7); render(); };
+  document.getElementById('next-wk').onclick = ()=>{ state.weekStart = addDays(state.weekStart, 7); render(); };
+  document.getElementById('this-wk').onclick = ()=>{ state.weekStart = getMonday(new Date()); render(); };
+
+  document.querySelectorAll('.r-edit').forEach(sel=>{
+    sel.onchange = async ()=>{
+      const day = sel.dataset.day, loc = sel.dataset.loc;
+      const staff_id = sel.value || null;
+      const { error } = await sb.from('roster').upsert(
+        { week_start: weekKey, day_of_week: day, location: loc, staff_id, updated_at: new Date().toISOString() },
+        { onConflict: 'week_start,day_of_week,location' }
+      );
+      if (error){ state.error = 'Roster save failed: ' + error.message; render(); }
+    };
+  });
+}
+
+// =====================================================================
+// MY HOURS TAB
+// =====================================================================
+async function renderHours(){
+  const tc = document.getElementById('tab-content');
+  const weekKey = isoDate(state.weekStart);
+  const endDate = addDays(state.weekStart, 4);
+  const endKey = isoDate(endDate);
+
+  const [rosterRes, hoursRes] = await Promise.all([
+    sb.from('roster').select('*').eq('week_start', weekKey),
+    sb.from('timesheet_entries').select('*').eq('staff_id', state.profile.id).gte('work_date', weekKey).lte('work_date', endKey)
+  ]);
+  if (rosterRes.error || hoursRes.error){ tc.innerHTML = `<div class="error">Could not load: ${esc((rosterRes.error||hoursRes.error).message)}</div>`; return; }
+
+  const rmap = {}; rosterRes.data.forEach(r=>{ if(r.staff_id===state.profile.id){ rmap[r.day_of_week] = r.location; } });
+  const hmap = {}; hoursRes.data.forEach(h=>{ hmap[h.work_date] = h; });
+
+  let html = `<div class="week-nav">
+    <button class="btn btn-icon" id="prev-wk">‹</button>
+    <span class="week-label">Week of ${fmtDate(state.weekStart)} – ${fmtDate(endDate)}</span>
+    <button class="btn btn-icon" id="next-wk">›</button>
+    <button class="btn" id="this-wk" style="margin-left:auto;">This week</button>
+  </div>`;
+  html += `<div class="card scroll-x"><table class="tbl"><thead><tr>
+    <th style="width:100px;">Day</th><th style="width:120px;">Location</th><th style="width:95px;">Start</th><th style="width:95px;">End</th><th style="width:80px;">Break (min)</th><th style="width:70px;">Total</th><th>Notes</th></tr></thead><tbody>`;
+  let weekTotal = 0;
+  DAYS.forEach((day,i)=>{
+    const date = addDays(state.weekStart, i);
+    const dKey = isoDate(date);
+    const h = hmap[dKey] || {};
+    const scheduledLoc = rmap[day] || '';
+    const start = h.start_time || (scheduledLoc?'08:30':'');
+    const end   = h.end_time   || (scheduledLoc?'17:00':'');
+    const brk   = h.break_minutes != null ? h.break_minutes : (scheduledLoc?30:0);
+    const tot   = hoursBetween(start,end,brk);
+    weekTotal += tot;
+    let locOpts = '<option value="">—</option>';
+    LOCATIONS.forEach(loc=>{ locOpts += `<option value="${loc}" ${(h.location||scheduledLoc)===loc?'selected':''}>${loc}</option>`; });
+    html += `<tr data-day="${dKey}">
+      <td>${day}<div style="font-size:11px; color:var(--text-muted);">${fmtDate(date)}</div></td>
+      <td><select class="hrs-loc">${locOpts}</select></td>
+      <td><input class="hrs-start" type="time" value="${start}"/></td>
+      <td><input class="hrs-end" type="time" value="${end}"/></td>
+      <td><input class="hrs-break" type="number" min="0" max="180" value="${brk}"/></td>
+      <td class="hrs-total" style="font-weight:600;">${tot.toFixed(2)}</td>
+      <td><input class="hrs-notes" type="text" value="${esc(h.notes||'')}" placeholder="optional"/></td>
+    </tr>`;
+  });
+  html += `</tbody></table>
+    <div style="display:flex; align-items:center; gap:14px; margin-top:16px; flex-wrap:wrap;">
+      <div class="stat" style="flex:1; min-width:160px;"><div class="stat-label">Week total</div><div class="stat-value" id="week-total">${weekTotal.toFixed(2)} hrs</div></div>
+      <button class="btn btn-primary" id="save-hours">Save timesheet</button>
+      <button class="btn" id="export-csv">Download Xero CSV</button>
+    </div>
+  </div>`;
+  tc.innerHTML = html;
+
+  document.getElementById('prev-wk').onclick = ()=>{ state.weekStart = addDays(state.weekStart,-7); render(); };
+  document.getElementById('next-wk').onclick = ()=>{ state.weekStart = addDays(state.weekStart, 7); render(); };
+  document.getElementById('this-wk').onclick = ()=>{ state.weekStart = getMonday(new Date()); render(); };
+
+  function recalc(){
+    let total = 0;
+    document.querySelectorAll('tbody tr').forEach(tr=>{
+      const s = tr.querySelector('.hrs-start').value;
+      const e = tr.querySelector('.hrs-end').value;
+      const b = parseInt(tr.querySelector('.hrs-break').value)||0;
+      const t = hoursBetween(s,e,b);
+      tr.querySelector('.hrs-total').textContent = t.toFixed(2);
+      total += t;
+    });
+    document.getElementById('week-total').textContent = total.toFixed(2)+' hrs';
+  }
+  document.querySelectorAll('.hrs-start,.hrs-end,.hrs-break').forEach(el=> el.oninput = recalc);
+
+  document.getElementById('save-hours').onclick = async (ev)=>{
+    ev.target.disabled = true; ev.target.textContent = 'Saving…';
+    const rows = [];
+    document.querySelectorAll('tbody tr').forEach(tr=>{
+      rows.push({
+        staff_id: state.profile.id,
+        work_date: tr.dataset.day,
+        location: tr.querySelector('.hrs-loc').value || null,
+        start_time: tr.querySelector('.hrs-start').value || null,
+        end_time: tr.querySelector('.hrs-end').value || null,
+        break_minutes: parseInt(tr.querySelector('.hrs-break').value)||0,
+        notes: tr.querySelector('.hrs-notes').value || null,
+        updated_at: new Date().toISOString()
+      });
+    });
+    const { error } = await sb.from('timesheet_entries').upsert(rows, { onConflict: 'staff_id,work_date' });
+    ev.target.disabled = false; ev.target.textContent = 'Save timesheet';
+    if (error){ state.error = 'Save failed: ' + error.message; render(); return; }
+    state.flash = 'Timesheet saved for week of '+fmtDate(state.weekStart)+'.';
+    render();
+  };
+
+  document.getElementById('export-csv').onclick = ()=>{
+    let csv = 'EmployeeName,Date,EarningsRate,Location,StartTime,EndTime,BreakMinutes,TotalHours,Notes\n';
+    document.querySelectorAll('tbody tr').forEach(tr=>{
+      const dKey = tr.dataset.day;
+      const s = tr.querySelector('.hrs-start').value;
+      const e = tr.querySelector('.hrs-end').value;
+      const b = parseInt(tr.querySelector('.hrs-break').value)||0;
+      const t = hoursBetween(s,e,b);
+      const loc = tr.querySelector('.hrs-loc').value;
+      const notes = (tr.querySelector('.hrs-notes').value||'').replace(/"/g,'""');
+      if (t > 0) csv += `"${state.profile.name}","${dKey}","Ordinary Hours","${loc}","${s}","${e}","${b}","${t.toFixed(2)}","${notes}"\n`;
+    });
+    downloadCsv(csv, `timesheet_${state.profile.name.replace(/\s+/g,'_').toLowerCase()}_${weekKey}.csv`);
+  };
+}
+
+function downloadCsv(csv, filename){
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// =====================================================================
+// REQUESTS TAB
+// =====================================================================
+async function renderRequests(){
+  const tc = document.getElementById('tab-content');
+  const { data: mine, error } = await sb.from('requests').select('*').eq('staff_id', state.profile.id).order('created_at',{ ascending:false });
+  if (error){ tc.innerHTML = `<div class="error">Could not load: ${esc(error.message)}</div>`; return; }
+
+  let staffOpts = ''; allStaff.filter(s=> s.id!==state.profile.id && !s.is_admin).forEach(s=>{ staffOpts += `<option value="${s.id}">${esc(s.name)}</option>`; });
+  let locOpts = ''; LOCATIONS.forEach(l=>{ locOpts += `<option value="${l}">${l}</option>`; });
+
+  let html = `<div class="card">
+    <p class="card-title">Submit a request</p>
+    <div class="row"><label class="label">Type</label>
+      <select id="req-type" class="input" style="flex:1; min-width:160px;">
+        <option value="leave">Leave</option>
+        <option value="roster">Roster change</option>
+        <option value="location">Location change</option>
+        <option value="swap">Shift swap</option>
+      </select></div>
+    <div class="row"><label class="label">From date</label><input id="req-from" class="input" type="date" style="flex:1;"/></div>
+    <div class="row"><label class="label">To date</label><input id="req-to" class="input" type="date" style="flex:1;"/></div>
+    <div class="row" id="req-loc-row" style="display:none;"><label class="label">Location</label><select id="req-loc" class="input" style="flex:1;">${locOpts}</select></div>
+    <div class="row" id="req-swap-row" style="display:none;"><label class="label">Swap with</label><select id="req-swap" class="input" style="flex:1;">${staffOpts}</select></div>
+    <div class="row"><label class="label">Reason</label><textarea id="req-reason" class="input" style="flex:1; min-height:60px;" placeholder="Brief reason"></textarea></div>
+    <button class="btn btn-primary" id="req-submit">Submit request</button>
+  </div>`;
+
+  html += `<div class="card"><p class="card-title">My requests</p>`;
+  if (!mine.length) html += `<div class="empty">No requests yet.</div>`;
+  else {
+    html += `<div class="scroll-x"><table class="tbl"><thead><tr><th>Submitted</th><th>Type</th><th>Dates</th><th>Details</th><th>Status</th></tr></thead><tbody>`;
+    mine.forEach(r=>{
+      const cls = r.status==='approved'?'pill-approved':r.status==='rejected'?'pill-rejected':'pill-pending';
+      let det = r.reason || '';
+      if (r.location) det = `${esc(r.location)}${det?' — '+esc(det):''}`;
+      else det = esc(det);
+      if (r.swap_with){ const s = staffById(r.swap_with); if (s) det = `with ${esc(s.name)}${det?' — '+det:''}`; }
+      html += `<tr><td>${r.created_at.slice(0,10)}</td><td style="text-transform:capitalize;">${r.type}</td><td>${r.from_date}${r.to_date&&r.to_date!==r.from_date?' → '+r.to_date:''}</td><td>${det}</td><td><span class="pill ${cls}">${r.status}</span></td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+  html += `</div>`;
+  tc.innerHTML = html;
+
+  function syncRows(){
+    const t = document.getElementById('req-type').value;
+    document.getElementById('req-loc-row').style.display = (t==='location'||t==='roster')?'flex':'none';
+    document.getElementById('req-swap-row').style.display = (t==='swap')?'flex':'none';
+  }
+  document.getElementById('req-type').onchange = syncRows; syncRows();
+
+  document.getElementById('req-submit').onclick = async (ev)=>{
+    const type = document.getElementById('req-type').value;
+    const from = document.getElementById('req-from').value;
+    const to   = document.getElementById('req-to').value || from;
+    const reason = document.getElementById('req-reason').value.trim();
+    if (!from){ state.error='Please choose a from-date.'; render(); return; }
+    ev.target.disabled = true;
+    const payload = {
+      staff_id: state.profile.id, type, from_date: from, to_date: to || null, reason: reason || null,
+      location: (type==='location'||type==='roster') ? document.getElementById('req-loc').value : null,
+      swap_with: type==='swap' ? document.getElementById('req-swap').value || null : null
+    };
+    const { error } = await sb.from('requests').insert(payload);
+    ev.target.disabled = false;
+    if (error){ state.error = 'Submit failed: '+error.message; render(); return; }
+    state.flash = 'Request submitted. Missy will review it.';
+    render();
+  };
+}
+
+// =====================================================================
+// ADMIN TAB
+// =====================================================================
+async function renderAdmin(){
+  const tc = document.getElementById('tab-content');
+  const weekKey = isoDate(state.weekStart);
+  const endDate = addDays(state.weekStart, 4);
+  const endKey  = isoDate(endDate);
+
+  const [reqRes, hrsRes] = await Promise.all([
+    sb.from('requests').select('*').order('created_at', { ascending: true }),
+    sb.from('timesheet_entries').select('*').gte('work_date', weekKey).lte('work_date', endKey)
+  ]);
+  if (reqRes.error || hrsRes.error){ tc.innerHTML = `<div class="error">Load failed: ${esc((reqRes.error||hrsRes.error).message)}</div>`; return; }
+
+  const pending = reqRes.data.filter(r=>r.status==='pending');
+  const handled = reqRes.data.filter(r=>r.status!=='pending').reverse().slice(0,10);
+
+  // Per-staff hours summary
+  const totals = {}; allStaff.filter(s=>!s.is_admin).forEach(s=>{ totals[s.id]=0; });
+  hrsRes.data.forEach(h=>{
+    if (totals[h.staff_id] != null){ totals[h.staff_id] += hoursBetween(h.start_time, h.end_time, h.break_minutes); }
+  });
+  let totalAll = 0;
+  let sumRows = '';
+  allStaff.filter(s=>!s.is_admin).forEach(s=>{
+    const t = totals[s.id]; totalAll += t;
+    sumRows += `<tr><td>${esc(s.name)}</td><td style="text-align:right; font-weight:600;">${t.toFixed(2)} hrs</td></tr>`;
+  });
+
+  let html = `<div class="card">
+    <p class="card-title">Pending requests <span class="pill pill-pending" style="margin-left:6px;">${pending.length}</span></p>`;
+  if (!pending.length) html += `<div class="empty">No pending requests.</div>`;
+  else {
+    html += `<div class="scroll-x"><table class="tbl"><thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Details</th><th>Action</th></tr></thead><tbody>`;
+    pending.forEach(r=>{
+      const s = staffById(r.staff_id);
+      let det = r.reason || '';
+      if (r.location) det = `${esc(r.location)}${det?' — '+esc(det):''}`; else det = esc(det);
+      if (r.swap_with){ const sw = staffById(r.swap_with); if (sw) det = `with ${esc(sw.name)}${det?' — '+det:''}`; }
+      html += `<tr><td>${esc(s?s.name:'?')}</td><td style="text-transform:capitalize;">${r.type}</td><td>${r.from_date}${r.to_date&&r.to_date!==r.from_date?' → '+r.to_date:''}</td><td>${det}</td>
+        <td><button class="btn-approve btn" data-id="${r.id}" data-act="approved">Approve</button><button class="btn-reject btn" data-id="${r.id}" data-act="rejected">Reject</button></td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+  html += `</div>`;
+
+  html += `<div class="card">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+      <p class="card-title" style="margin:0; flex:1; min-width:220px;">Hours summary — week of ${fmtDate(state.weekStart)}</p>
+      <button class="btn btn-icon" id="prev-wk">‹</button>
+      <button class="btn btn-icon" id="next-wk">›</button>
+      <button class="btn btn-primary" id="export-all">Download Xero CSV (all staff)</button>
+    </div>
+    <table class="tbl"><thead><tr><th>Staff</th><th style="text-align:right;">Total hours</th></tr></thead><tbody>${sumRows}
+      <tr><td style="font-weight:600;">All staff</td><td style="text-align:right; font-weight:600;">${totalAll.toFixed(2)} hrs</td></tr>
+    </tbody></table>
+  </div>`;
+
+  if (handled.length){
+    html += `<div class="card"><p class="card-title">Recent decisions</p><div class="scroll-x"><table class="tbl"><thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Status</th></tr></thead><tbody>`;
+    handled.forEach(r=>{
+      const s = staffById(r.staff_id);
+      const cls = r.status==='approved'?'pill-approved':'pill-rejected';
+      html += `<tr><td>${esc(s?s.name:'?')}</td><td style="text-transform:capitalize;">${r.type}</td><td>${r.from_date}${r.to_date&&r.to_date!==r.from_date?' → '+r.to_date:''}</td><td><span class="pill ${cls}">${r.status}</span></td></tr>`;
+    });
+    html += `</tbody></table></div></div>`;
+  }
+  tc.innerHTML = html;
+
+  document.getElementById('prev-wk').onclick = ()=>{ state.weekStart = addDays(state.weekStart,-7); render(); };
+  document.getElementById('next-wk').onclick = ()=>{ state.weekStart = addDays(state.weekStart, 7); render(); };
+
+  document.querySelectorAll('.btn-approve,.btn-reject').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.id, act = btn.dataset.act;
+      const { error } = await sb.from('requests').update({ status: act, decided_at: new Date().toISOString(), decided_by: state.profile.id }).eq('id', id);
+      if (error){ state.error = 'Update failed: '+error.message; }
+      render();
+    };
+  });
+
+  document.getElementById('export-all').onclick = ()=>{
+    let csv = 'EmployeeName,Date,EarningsRate,Location,StartTime,EndTime,BreakMinutes,TotalHours,Notes\n';
+    hrsRes.data.forEach(h=>{
+      const s = staffById(h.staff_id); if (!s) return;
+      const t = hoursBetween(h.start_time, h.end_time, h.break_minutes);
+      if (t>0) csv += `"${s.name}","${h.work_date}","Ordinary Hours","${h.location||''}","${h.start_time||''}","${h.end_time||''}","${h.break_minutes||0}","${t.toFixed(2)}","${(h.notes||'').replace(/"/g,'""')}"\n`;
+    });
+    downloadCsv(csv, `xero_timesheets_week_${weekKey}.csv`);
+  };
+}
+
+// kick off
+init();
+</script>
+</body>
+</html>
