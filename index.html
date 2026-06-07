@@ -138,11 +138,24 @@ const SUPABASE_ANON_KEY = 'sb_publishable_9x-EQBdr5mzHwV7JtKGLxQ_b8yq9atc';
 // =====================================================================
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const LOCATIONS = ['Parkwood','Oxenford','Pimpama'];
-const DAYS      = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+const LOCATIONS   = ['Parkwood','Oxenford','Pimpama'];
+// Pay week: Wednesday → Thursday → Friday → Monday → Tuesday
+const DAYS        = ['Wednesday','Thursday','Friday','Monday','Tuesday'];
+const DAY_OFFSETS = [0, 1, 2, 5, 6]; // days from Wednesday to each working day
 
-function getMonday(d){d=new Date(d);const day=d.getDay();const diff=d.getDate()-day+(day===0?-6:1);const m=new Date(d.setDate(diff));m.setHours(0,0,0,0);return m;}
+// ---- helpers ----
+function getWednesday(d){
+  // Snap to most recent Wednesday (pay week start)
+  d=new Date(d);
+  const day=d.getDay(); // 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
+  const daysBack=day>=3?day-3:day+4;
+  const m=new Date(d);
+  m.setDate(m.getDate()-daysBack);
+  m.setHours(0,0,0,0);
+  return m;
+}
 function fmtDate(d){return d.toLocaleDateString('en-AU',{day:'2-digit',month:'short'});}
+function fmtDateLong(d){return d.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});}
 function isoDate(d){const tz=d.getTimezoneOffset()*60000;return new Date(d-tz).toISOString().slice(0,10);}
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
 function hoursBetween(start,end,breakMin){if(!start||!end)return 0;const[sh,sm]=start.split(':').map(Number);const[eh,em]=end.split(':').map(Number);const mins=(eh*60+em)-(sh*60+sm)-(breakMin||0);return Math.max(0,Math.round((mins/60)*100)/100);}
@@ -150,8 +163,16 @@ function esc(s){return(s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;'
 function staffById(id){return allStaff.find(s=>s.id===id);}
 function t5(t){return t?t.slice(0,5):''}
 function removeModal(id){const el=document.getElementById(id);if(el)el.remove();}
+function payWeekLabel(weekStart){
+  const endDate=addDays(weekStart,6); // Tuesday = 6 days after Wednesday
+  return `Pay week — Wed ${fmtDate(weekStart)} to Tue ${fmtDate(endDate)}`;
+}
+function fortnightLabel(weekStart){
+  const endDate=addDays(weekStart,13); // 2nd Tuesday = 13 days after Wednesday
+  return `Fortnight — Wed ${fmtDate(weekStart)} to Tue ${fmtDate(endDate)}`;
+}
 
-let state={user:null,profile:null,tab:'roster',weekStart:getMonday(new Date()),flash:null,error:null};
+let state={user:null,profile:null,tab:'roster',weekStart:getWednesday(new Date()),flash:null,error:null};
 let allStaff=[];
 const root=document.getElementById('root');
 const userbox=document.getElementById('userbox');
@@ -174,7 +195,7 @@ async function loadSession(user){
 }
 async function logout(){await sb.auth.signOut();}
 
-// ---- RENDER ----
+// ---- MAIN RENDER ----
 function render(){
   if(!state.profile){renderLogin();return;}
   userbox.innerHTML=`<b>${esc(state.profile.name)}</b>${esc(state.profile.role)} · <a href="#" id="logout-link">Logout</a>`;
@@ -206,12 +227,11 @@ async function renderRoster(){
   DAYS.forEach(d=>{map[d]={};LOCATIONS.forEach(l=>{map[d][l]={staff_id:null,status:'normal',start_time:'08:30',end_time:'17:00'};});});
   rows.forEach(r=>{if(map[r.day_of_week])map[r.day_of_week][r.location]={staff_id:r.staff_id,status:r.status||'normal',start_time:t5(r.start_time)||'08:30',end_time:t5(r.end_time)||'17:00'};});
 
-  const endDate=addDays(state.weekStart,4);
   const isAdmin=state.profile.is_admin;
 
   let html=`<div class="week-nav">
     <button class="btn btn-icon" id="prev-wk">‹</button>
-    <span class="week-label">Week of ${fmtDate(state.weekStart)} – ${fmtDate(endDate)}</span>
+    <span class="week-label">${payWeekLabel(state.weekStart)}</span>
     <button class="btn btn-icon" id="next-wk">›</button>
     <button class="btn" id="this-wk" style="margin-left:auto;">This week</button>
     ${isAdmin?'<button class="btn" id="copy-prev-wk">Copy from previous week</button>':''}
@@ -228,7 +248,7 @@ async function renderRoster(){
     <div class="r-cell r-head"><span class="loc-pill loc-pim">Pimpama</span></div>`;
 
   DAYS.forEach((day,i)=>{
-    const date=addDays(state.weekStart,i);
+    const date=addDays(state.weekStart,DAY_OFFSETS[i]);
     html+=`<div class="r-cell r-day">${day}<br><span style="font-size:11px;font-weight:400;">${fmtDate(date)}</span></div>`;
     LOCATIONS.forEach(loc=>{
       const cell=map[day][loc];
@@ -238,8 +258,9 @@ async function renderRoster(){
       const et=cell.end_time;
       const cellCls='r-cell'+(status!=='normal'?` status-${status}`:'');
       if(isAdmin){
+        // Show ALL staff in dropdown (including admins)
         let staffOpts='<option value="">— empty —</option>';
-        allStaff.filter(s=>!s.is_admin).forEach(s=>{staffOpts+=`<option value="${s.id}" ${sid===s.id?'selected':''}>${esc(s.name.split(' ')[0])}</option>`;});
+        allStaff.forEach(s=>{staffOpts+=`<option value="${s.id}" ${sid===s.id?'selected':''}>${esc(s.name.split(' ')[0])}</option>`;});
         const stOpts=`<option value="normal" ${status==='normal'?'selected':''}>Working</option>
           <option value="sl" ${status==='sl'?'selected':''}>SL – Sick Leave</option>
           <option value="al" ${status==='al'?'selected':''}>AL – Annual Leave</option>
@@ -263,15 +284,14 @@ async function renderRoster(){
       }
     });
   });
-  html+=`</div>${isAdmin?'<p style="font-size:12px;color:var(--text-muted);margin-top:12px;">Changes save automatically. Set staff, status and hours for each cell.</p>':''}</div>`;
+  html+=`</div>${isAdmin?'<p style="font-size:12px;color:var(--text-muted);margin-top:12px;">Changes save automatically. Set staff, status and rostered hours per cell.</p>':''}</div>`;
   tc.innerHTML=html;
 
   document.getElementById('prev-wk').onclick=()=>{state.weekStart=addDays(state.weekStart,-7);render();};
   document.getElementById('next-wk').onclick=()=>{state.weekStart=addDays(state.weekStart,7);render();};
-  document.getElementById('this-wk').onclick=()=>{state.weekStart=getMonday(new Date());render();};
+  document.getElementById('this-wk').onclick=()=>{state.weekStart=getWednesday(new Date());render();};
   if(!isAdmin)return;
 
-  // save helper — always reads all 4 fields from DOM so nothing gets overwritten
   async function saveCell(day,loc){
     const stfSel=document.querySelector(`.r-edit[data-day="${day}"][data-loc="${loc}"]`);
     const stsSel=document.querySelector(`.r-status[data-day="${day}"][data-loc="${loc}"]`);
@@ -297,7 +317,6 @@ async function renderRoster(){
   });
   document.querySelectorAll('.r-start,.r-end').forEach(inp=>{inp.onchange=()=>saveCell(inp.dataset.day,inp.dataset.loc);});
 
-  // copy from previous week
   document.getElementById('copy-prev-wk').onclick=async(ev)=>{
     const prevWeekStart=addDays(state.weekStart,-7);
     const prevWeekKey=isoDate(prevWeekStart);
@@ -306,17 +325,15 @@ async function renderRoster(){
     const validPrev=(prevRows||[]).filter(r=>r.staff_id);
     if(!validPrev.length){state.error='Previous week has no roster to copy from.';render();return;}
     const currentHasData=rows.some(r=>r.staff_id);
-    if(currentHasData&&!confirm('This will overwrite the current week. Continue?'))return;
+    if(currentHasData&&!confirm('This will overwrite the current pay week roster. Continue?'))return;
     const payload=validPrev.map(r=>({week_start:weekKey,day_of_week:r.day_of_week,location:r.location,staff_id:r.staff_id,status:r.status||'normal',start_time:t5(r.start_time)||'08:30',end_time:t5(r.end_time)||'17:00',updated_at:new Date().toISOString()}));
     ev.target.disabled=true;ev.target.textContent='Copying…';
     const{error:uErr}=await sb.from('roster').upsert(payload,{onConflict:'week_start,day_of_week,location'});
     ev.target.disabled=false;ev.target.textContent='Copy from previous week';
     if(uErr){state.error='Copy failed: '+uErr.message;render();return;}
-    state.flash='Roster copied from week of '+fmtDate(prevWeekStart)+'.';
-    render();
+    state.flash='Roster copied from pay week of '+fmtDate(prevWeekStart)+'.';render();
   };
 
-  // check roster
   document.getElementById('check-roster').onclick=async()=>{
     const issues=[];
     DAYS.forEach(day=>{
@@ -335,7 +352,7 @@ async function renderRoster(){
     showCheckModal(issues);
   };
 
-  document.getElementById('export-pdf').onclick=()=>showPrintModal(map);
+  document.getElementById('export-pdf').onclick=()=>showPrintModal();
 }
 
 // ---- CHECK MODAL ----
@@ -344,7 +361,7 @@ function showCheckModal(issues){
   const doubleIssues=issues.filter(i=>i.type==='double');
   let body;
   if(!issues.length){
-    body=`<div style="text-align:center;padding:20px;"><div style="font-size:40px;margin-bottom:8px;">✅</div><p style="font-weight:600;margin:0 0 4px;">All clear!</p><p style="color:var(--text-muted);font-size:13px;margin:0;">No conflicts found for the week of ${fmtDate(state.weekStart)}.</p></div>`;
+    body=`<div style="text-align:center;padding:20px;"><div style="font-size:40px;margin-bottom:8px;">✅</div><p style="font-weight:600;margin:0 0 4px;">All clear!</p><p style="color:var(--text-muted);font-size:13px;margin:0;">No conflicts found for this pay week.</p></div>`;
   } else {
     body='';
     if(coverIssues.length){
@@ -362,13 +379,13 @@ function showCheckModal(issues){
 }
 
 // ---- PRINT ----
-function showPrintModal(map){
+function showPrintModal(){
   const defaultWeek=isoDate(state.weekStart);
-  document.body.insertAdjacentHTML('beforeend',`<div class="overlay" id="print-modal" onclick="if(event.target===this)removeModal('print-modal')"><div class="modal"><div style="display:flex;align-items:center;margin-bottom:16px;"><p class="modal-title" style="margin:0;flex:1;">Export Roster PDF</p><button class="modal-close" onclick="removeModal('print-modal')">✕</button></div><div class="row"><label class="label">Week beginning</label><input type="date" id="print-week" class="input" value="${defaultWeek}" style="flex:1;"/></div><p style="font-size:12px;color:var(--text-muted);margin:4px 0 20px;">Shows Mon–Fri with staff names, rostered hours and status.</p><div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn" onclick="removeModal('print-modal')">Cancel</button><button class="btn btn-primary" id="print-go">Print roster</button></div></div></div>`);
+  document.body.insertAdjacentHTML('beforeend',`<div class="overlay" id="print-modal" onclick="if(event.target===this)removeModal('print-modal')"><div class="modal"><div style="display:flex;align-items:center;margin-bottom:16px;"><p class="modal-title" style="margin:0;flex:1;">Export Roster PDF</p><button class="modal-close" onclick="removeModal('print-modal')">✕</button></div><div class="row"><label class="label">Pay week starting</label><input type="date" id="print-week" class="input" value="${defaultWeek}" style="flex:1;"/></div><p style="font-size:12px;color:var(--text-muted);margin:4px 0 20px;">Select any Wednesday. Shows Wed–Fri, Mon–Tue with rostered hours and status.</p><div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn" onclick="removeModal('print-modal')">Cancel</button><button class="btn btn-primary" id="print-go">Print roster</button></div></div></div>`);
   document.getElementById('print-go').onclick=async()=>{
     const val=document.getElementById('print-week').value;
-    if(!val){alert('Please select a week.');return;}
-    const weekStart=getMonday(new Date(val+'T00:00:00'));
+    if(!val){alert('Please select a Wednesday.');return;}
+    const weekStart=getWednesday(new Date(val+'T00:00:00'));
     const weekKey=isoDate(weekStart);
     removeModal('print-modal');
     const{data:printRows}=await sb.from('roster').select('*').eq('week_start',weekKey);
@@ -379,10 +396,10 @@ function showPrintModal(map){
   };
 }
 function printRoster(weekStart,pmap){
-  const endDate=addDays(weekStart,4);
+  const endDate=addDays(weekStart,6);
   let trows='';
   DAYS.forEach((day,i)=>{
-    const date=addDays(weekStart,i);
+    const date=addDays(weekStart,DAY_OFFSETS[i]);
     const dateStr=date.toLocaleDateString('en-AU',{weekday:'short',day:'2-digit',month:'short'});
     trows+=`<tr><td style="font-weight:600;white-space:nowrap;">${day}</td><td style="font-size:10px;white-space:nowrap;">${dateStr}</td>`;
     LOCATIONS.forEach(loc=>{
@@ -396,7 +413,7 @@ function printRoster(weekStart,pmap){
     });
     trows+=`</tr>`;
   });
-  document.getElementById('print-view').innerHTML=`<h1>Mind on Health</h1><h2>Staff Roster</h2><p class="print-meta">Week beginning Monday ${fmtDate(weekStart)} – Friday ${fmtDate(endDate)} · Printed ${new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'})}</p><table><thead><tr><th>Day</th><th>Date</th><th>Parkwood</th><th>Oxenford</th><th>Pimpama</th></tr></thead><tbody>${trows}</tbody></table><p class="print-legend">SL = Sick Leave · AL = Annual Leave · Off = Rostered Day Off</p>`;
+  document.getElementById('print-view').innerHTML=`<h1>Mind on Health</h1><h2>Staff Roster</h2><p class="print-meta">${payWeekLabel(weekStart)} · Printed ${fmtDateLong(new Date())}</p><table><thead><tr><th>Day</th><th>Date</th><th>Parkwood</th><th>Oxenford</th><th>Pimpama</th></tr></thead><tbody>${trows}</tbody></table><p class="print-legend">SL = Sick Leave · AL = Annual Leave · Off = Rostered Day Off</p>`;
   setTimeout(()=>window.print(),100);
 }
 
@@ -404,26 +421,21 @@ function printRoster(weekStart,pmap){
 async function renderHours(){
   const tc=document.getElementById('tab-content');
   const weekKey=isoDate(state.weekStart);
-  const endDate=addDays(state.weekStart,4);
-  const endKey=isoDate(endDate);
+  const weekEndKey=isoDate(addDays(state.weekStart,6)); // Tuesday
+
   const[rosterRes,hoursRes]=await Promise.all([
     sb.from('roster').select('*').eq('week_start',weekKey),
-    sb.from('timesheet_entries').select('*').eq('staff_id',state.profile.id).gte('work_date',weekKey).lte('work_date',endKey)
+    sb.from('timesheet_entries').select('*').eq('staff_id',state.profile.id).gte('work_date',weekKey).lte('work_date',weekEndKey)
   ]);
   if(rosterRes.error||hoursRes.error){tc.innerHTML=`<div class="error">Could not load: ${esc((rosterRes.error||hoursRes.error).message)}</div>`;return;}
 
-  // rmap includes rostered location AND times
   const rmap={};
-  rosterRes.data.forEach(r=>{
-    if(r.staff_id===state.profile.id){
-      rmap[r.day_of_week]={location:r.location,start_time:t5(r.start_time)||'08:30',end_time:t5(r.end_time)||'17:00'};
-    }
-  });
+  rosterRes.data.forEach(r=>{if(r.staff_id===state.profile.id){rmap[r.day_of_week]={location:r.location,start_time:t5(r.start_time)||'08:30',end_time:t5(r.end_time)||'17:00'};}});
   const hmap={};hoursRes.data.forEach(h=>{hmap[h.work_date]=h;});
 
   let html=`<div class="week-nav">
     <button class="btn btn-icon" id="prev-wk">‹</button>
-    <span class="week-label">Week of ${fmtDate(state.weekStart)} – ${fmtDate(endDate)}</span>
+    <span class="week-label">${payWeekLabel(state.weekStart)}</span>
     <button class="btn btn-icon" id="next-wk">›</button>
     <button class="btn" id="this-wk" style="margin-left:auto;">This week</button>
   </div>`;
@@ -432,15 +444,13 @@ async function renderHours(){
   </tr></thead><tbody>`;
   let weekTotal=0;
   DAYS.forEach((day,i)=>{
-    const date=addDays(state.weekStart,i);
+    const date=addDays(state.weekStart,DAY_OFFSETS[i]);
     const dKey=isoDate(date);
     const h=hmap[dKey]||{};
     const rostered=rmap[day];
     const scheduledLoc=rostered?.location||'';
-    const rosteredStart=rostered?.start_time||'08:30';
-    const rosteredEnd=rostered?.end_time||'17:00';
-    const start=h.start_time||(scheduledLoc?rosteredStart:'');
-    const end=h.end_time||(scheduledLoc?rosteredEnd:'');
+    const start=h.start_time||(scheduledLoc?rostered?.start_time||'08:30':'');
+    const end=h.end_time||(scheduledLoc?rostered?.end_time||'17:00':'');
     const brk=h.break_minutes!=null?h.break_minutes:(scheduledLoc?30:0);
     const tot=hoursBetween(start,end,brk);
     weekTotal+=tot;
@@ -457,15 +467,15 @@ async function renderHours(){
     </tr>`;
   });
   html+=`</tbody></table><div style="display:flex;align-items:center;gap:14px;margin-top:16px;flex-wrap:wrap;">
-    <div class="stat" style="flex:1;min-width:160px;"><div class="stat-label">Week total</div><div class="stat-value" id="week-total">${weekTotal.toFixed(2)} hrs</div></div>
+    <div class="stat" style="flex:1;min-width:160px;"><div class="stat-label">This pay week total</div><div class="stat-value" id="week-total">${weekTotal.toFixed(2)} hrs</div></div>
     <button class="btn btn-primary" id="save-hours">Save timesheet</button>
-    <button class="btn" id="export-csv">Download Xero CSV</button>
+    <button class="btn" id="export-csv">Download Xero CSV (fortnight)</button>
   </div></div>`;
   tc.innerHTML=html;
 
   document.getElementById('prev-wk').onclick=()=>{state.weekStart=addDays(state.weekStart,-7);render();};
   document.getElementById('next-wk').onclick=()=>{state.weekStart=addDays(state.weekStart,7);render();};
-  document.getElementById('this-wk').onclick=()=>{state.weekStart=getMonday(new Date());render();};
+  document.getElementById('this-wk').onclick=()=>{state.weekStart=getWednesday(new Date());render();};
 
   function recalc(){let total=0;document.querySelectorAll('tbody tr').forEach(tr=>{const s=tr.querySelector('.hrs-start').value;const e=tr.querySelector('.hrs-end').value;const b=parseInt(tr.querySelector('.hrs-break').value)||0;const t=hoursBetween(s,e,b);tr.querySelector('.hrs-total').textContent=t.toFixed(2);total+=t;});document.getElementById('week-total').textContent=total.toFixed(2)+' hrs';}
   document.querySelectorAll('.hrs-start,.hrs-end,.hrs-break').forEach(el=>el.oninput=recalc);
@@ -477,23 +487,28 @@ async function renderHours(){
     const{error}=await sb.from('timesheet_entries').upsert(rowsOut,{onConflict:'staff_id,work_date'});
     ev.target.disabled=false;ev.target.textContent='Save timesheet';
     if(error){state.error='Save failed: '+error.message;render();return;}
-    state.flash='Timesheet saved for week of '+fmtDate(state.weekStart)+'.';
-    render();
+    state.flash='Timesheet saved.';render();
   };
 
-  document.getElementById('export-csv').onclick=()=>{
+  // Fortnight export: fetches BOTH pay weeks (14 days)
+  document.getElementById('export-csv').onclick=async()=>{
+    const fortnightEnd=isoDate(addDays(state.weekStart,13));
+    const{data:ftHours}=await sb.from('timesheet_entries').select('*').eq('staff_id',state.profile.id).gte('work_date',weekKey).lte('work_date',fortnightEnd);
     let csv='EmployeeName,Date,EarningsRate,Location,StartTime,EndTime,BreakMinutes,TotalHours,Notes\n';
-    document.querySelectorAll('tbody tr').forEach(tr=>{const dKey=tr.dataset.day;const s=tr.querySelector('.hrs-start').value;const e=tr.querySelector('.hrs-end').value;const b=parseInt(tr.querySelector('.hrs-break').value)||0;const t=hoursBetween(s,e,b);const loc=tr.querySelector('.hrs-loc').value;const notes=(tr.querySelector('.hrs-notes').value||'').replace(/"/g,'""');if(t>0)csv+=`"${state.profile.name}","${dKey}","Ordinary Hours","${loc}","${s}","${e}","${b}","${t.toFixed(2)}","${notes}"\n`;});
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`timesheet_${state.profile.name.replace(/\s+/g,'_').toLowerCase()}_${weekKey}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+    (ftHours||[]).forEach(h=>{const t=hoursBetween(h.start_time,h.end_time,h.break_minutes);if(t>0)csv+=`"${state.profile.name}","${h.work_date}","Ordinary Hours","${h.location||''}","${h.start_time||''}","${h.end_time||''}","${h.break_minutes||0}","${t.toFixed(2)}","${(h.notes||'').replace(/"/g,'""')}"\n`;});
+    downloadCsv(csv,`timesheet_${state.profile.name.replace(/\s+/g,'_').toLowerCase()}_fortnight_${weekKey}.csv`);
   };
 }
+
+function downloadCsv(csv,filename){const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);}
 
 // ---- REQUESTS TAB ----
 async function renderRequests(){
   const tc=document.getElementById('tab-content');
   const{data:mine,error}=await sb.from('requests').select('*').eq('staff_id',state.profile.id).order('created_at',{ascending:false});
   if(error){tc.innerHTML=`<div class="error">Could not load: ${esc(error.message)}</div>`;return;}
-  let staffOpts='';allStaff.filter(s=>s.id!==state.profile.id&&!s.is_admin).forEach(s=>{staffOpts+=`<option value="${s.id}">${esc(s.name)}</option>`;});
+  // Swap-with: all staff except self
+  let staffOpts='';allStaff.filter(s=>s.id!==state.profile.id).forEach(s=>{staffOpts+=`<option value="${s.id}">${esc(s.name)}</option>`;});
   let locOpts='';LOCATIONS.forEach(l=>{locOpts+=`<option value="${l}">${l}</option>`;});
   let html=`<div class="card"><p class="card-title">Submit a request</p>
     <div class="row"><label class="label">Type</label><select id="req-type" class="input" style="flex:1;min-width:160px;"><option value="leave">Leave</option><option value="roster">Roster change</option><option value="location">Location change</option><option value="swap">Shift swap</option></select></div>
@@ -506,13 +521,8 @@ async function renderRequests(){
   </div>`;
   html+=`<div class="card"><p class="card-title">My requests</p>`;
   if(!mine.length)html+=`<div class="empty">No requests yet.</div>`;
-  else{
-    html+=`<div class="scroll-x"><table class="tbl"><thead><tr><th>Submitted</th><th>Type</th><th>Dates</th><th>Details</th><th>Status</th></tr></thead><tbody>`;
-    mine.forEach(r=>{const cls=r.status==='approved'?'pill-approved':r.status==='rejected'?'pill-rejected':'pill-pending';let det=r.reason||'';if(r.location)det=`${esc(r.location)}${det?' — '+esc(det):''}`;else det=esc(det);if(r.swap_with){const sw=staffById(r.swap_with);if(sw)det=`with ${esc(sw.name)}${det?' — '+det:''}`;}html+=`<tr><td>${r.created_at.slice(0,10)}</td><td style="text-transform:capitalize;">${r.type}</td><td>${r.from_date}${r.to_date&&r.to_date!==r.from_date?' → '+r.to_date:''}</td><td>${det}</td><td><span class="pill ${cls}">${r.status}</span></td></tr>`;});
-    html+=`</tbody></table></div>`;
-  }
-  html+=`</div>`;
-  tc.innerHTML=html;
+  else{html+=`<div class="scroll-x"><table class="tbl"><thead><tr><th>Submitted</th><th>Type</th><th>Dates</th><th>Details</th><th>Status</th></tr></thead><tbody>`;mine.forEach(r=>{const cls=r.status==='approved'?'pill-approved':r.status==='rejected'?'pill-rejected':'pill-pending';let det=r.reason||'';if(r.location)det=`${esc(r.location)}${det?' — '+esc(det):''}`;else det=esc(det);if(r.swap_with){const sw=staffById(r.swap_with);if(sw)det=`with ${esc(sw.name)}${det?' — '+det:''}`;}html+=`<tr><td>${r.created_at.slice(0,10)}</td><td style="text-transform:capitalize;">${r.type}</td><td>${r.from_date}${r.to_date&&r.to_date!==r.from_date?' → '+r.to_date:''}</td><td>${det}</td><td><span class="pill ${cls}">${r.status}</span></td></tr>`;});html+=`</tbody></table></div>`;}
+  html+=`</div>`;tc.innerHTML=html;
   function syncRows(){const t=document.getElementById('req-type').value;document.getElementById('req-loc-row').style.display=(t==='location'||t==='roster')?'flex':'none';document.getElementById('req-swap-row').style.display=(t==='swap')?'flex':'none';}
   document.getElementById('req-type').onchange=syncRows;syncRows();
   document.getElementById('req-submit').onclick=async(ev)=>{
@@ -522,7 +532,7 @@ async function renderRequests(){
     const{error}=await sb.from('requests').insert({staff_id:state.profile.id,type,from_date:from,to_date:to||null,reason:reason||null,location:(type==='location'||type==='roster')?document.getElementById('req-loc').value:null,swap_with:type==='swap'?document.getElementById('req-swap').value||null:null});
     ev.target.disabled=false;
     if(error){state.error='Submit failed: '+error.message;render();return;}
-    state.flash='Request submitted. Missy will review it.';render();
+    state.flash='Request submitted.';render();
   };
 }
 
@@ -530,38 +540,45 @@ async function renderRequests(){
 async function renderAdmin(){
   const tc=document.getElementById('tab-content');
   const weekKey=isoDate(state.weekStart);
-  const endDate=addDays(state.weekStart,4);
-  const endKey=isoDate(endDate);
+  const weekEndKey=isoDate(addDays(state.weekStart,6));
   const[reqRes,hrsRes]=await Promise.all([
     sb.from('requests').select('*').order('created_at',{ascending:true}),
-    sb.from('timesheet_entries').select('*').gte('work_date',weekKey).lte('work_date',endKey)
+    sb.from('timesheet_entries').select('*').gte('work_date',weekKey).lte('work_date',weekEndKey)
   ]);
   if(reqRes.error||hrsRes.error){tc.innerHTML=`<div class="error">Load failed: ${esc((reqRes.error||hrsRes.error).message)}</div>`;return;}
   const pending=reqRes.data.filter(r=>r.status==='pending');
   const handled=reqRes.data.filter(r=>r.status!=='pending').reverse().slice(0,10);
-  const totals={};allStaff.filter(s=>!s.is_admin).forEach(s=>{totals[s.id]=0;});
+  // Include ALL staff in hours summary
+  const totals={};allStaff.forEach(s=>{totals[s.id]=0;});
   hrsRes.data.forEach(h=>{if(totals[h.staff_id]!=null)totals[h.staff_id]+=hoursBetween(h.start_time,h.end_time,h.break_minutes);});
   let totalAll=0,sumRows='';
-  allStaff.filter(s=>!s.is_admin).forEach(s=>{const t=totals[s.id];totalAll+=t;sumRows+=`<tr><td>${esc(s.name)}</td><td style="text-align:right;font-weight:600;">${t.toFixed(2)} hrs</td></tr>`;});
+  allStaff.forEach(s=>{const t=totals[s.id];totalAll+=t;sumRows+=`<tr><td>${esc(s.name)}</td><td style="text-align:right;font-weight:600;">${t.toFixed(2)} hrs</td></tr>`;});
 
   let html=`<div class="card"><p class="card-title">Pending requests <span class="pill pill-pending" style="margin-left:6px;">${pending.length}</span></p>`;
   if(!pending.length)html+=`<div class="empty">No pending requests.</div>`;
-  else{
-    html+=`<div class="scroll-x"><table class="tbl"><thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Details</th><th>Action</th></tr></thead><tbody>`;
-    pending.forEach(r=>{const s=staffById(r.staff_id);let det=r.reason||'';if(r.location)det=`${esc(r.location)}${det?' — '+esc(det):''}`;else det=esc(det);if(r.swap_with){const sw=staffById(r.swap_with);if(sw)det=`with ${esc(sw.name)}${det?' — '+det:''}`;}html+=`<tr><td>${esc(s?s.name:'?')}</td><td style="text-transform:capitalize;">${r.type}</td><td>${r.from_date}${r.to_date&&r.to_date!==r.from_date?' → '+r.to_date:''}</td><td>${det}</td><td><button class="btn-approve btn" data-id="${r.id}" data-act="approved">Approve</button><button class="btn-reject btn" data-id="${r.id}" data-act="rejected">Reject</button></td></tr>`;});
-    html+=`</tbody></table></div>`;
-  }
-  html+=`</div><div class="card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;"><p class="card-title" style="margin:0;flex:1;">Hours summary — week of ${fmtDate(state.weekStart)}</p><button class="btn btn-icon" id="prev-wk">‹</button><button class="btn btn-icon" id="next-wk">›</button><button class="btn btn-primary" id="export-all">Download Xero CSV (all staff)</button></div><table class="tbl"><thead><tr><th>Staff</th><th style="text-align:right;">Total hours</th></tr></thead><tbody>${sumRows}<tr><td style="font-weight:600;">All staff</td><td style="text-align:right;font-weight:600;">${totalAll.toFixed(2)} hrs</td></tr></tbody></table></div>`;
+  else{html+=`<div class="scroll-x"><table class="tbl"><thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Details</th><th>Action</th></tr></thead><tbody>`;pending.forEach(r=>{const s=staffById(r.staff_id);let det=r.reason||'';if(r.location)det=`${esc(r.location)}${det?' — '+esc(det):''}`;else det=esc(det);if(r.swap_with){const sw=staffById(r.swap_with);if(sw)det=`with ${esc(sw.name)}${det?' — '+det:''}`;}html+=`<tr><td>${esc(s?s.name:'?')}</td><td style="text-transform:capitalize;">${r.type}</td><td>${r.from_date}${r.to_date&&r.to_date!==r.from_date?' → '+r.to_date:''}</td><td>${det}</td><td><button class="btn-approve btn" data-id="${r.id}" data-act="approved">Approve</button><button class="btn-reject btn" data-id="${r.id}" data-act="rejected">Reject</button></td></tr>`;});html+=`</tbody></table></div>`;}
+  html+=`</div>`;
+  html+=`<div class="card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+    <p class="card-title" style="margin:0;flex:1;">Hours — ${payWeekLabel(state.weekStart)}</p>
+    <button class="btn btn-icon" id="prev-wk">‹</button>
+    <button class="btn btn-icon" id="next-wk">›</button>
+    <button class="btn btn-primary" id="export-all">Download Xero CSV (fortnight)</button>
+  </div>
+  <table class="tbl"><thead><tr><th>Staff</th><th style="text-align:right;">This pay week</th></tr></thead><tbody>${sumRows}<tr><td style="font-weight:600;">All staff</td><td style="text-align:right;font-weight:600;">${totalAll.toFixed(2)} hrs</td></tr></tbody></table></div>`;
   if(handled.length){html+=`<div class="card"><p class="card-title">Recent decisions</p><div class="scroll-x"><table class="tbl"><thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Status</th></tr></thead><tbody>`;handled.forEach(r=>{const s=staffById(r.staff_id);const cls=r.status==='approved'?'pill-approved':'pill-rejected';html+=`<tr><td>${esc(s?s.name:'?')}</td><td style="text-transform:capitalize;">${r.type}</td><td>${r.from_date}${r.to_date&&r.to_date!==r.from_date?' → '+r.to_date:''}</td><td><span class="pill ${cls}">${r.status}</span></td></tr>`;});html+=`</tbody></table></div></div>`;}
   tc.innerHTML=html;
 
   document.getElementById('prev-wk').onclick=()=>{state.weekStart=addDays(state.weekStart,-7);render();};
   document.getElementById('next-wk').onclick=()=>{state.weekStart=addDays(state.weekStart,7);render();};
   document.querySelectorAll('.btn-approve,.btn-reject').forEach(btn=>{btn.onclick=async()=>{const{error}=await sb.from('requests').update({status:btn.dataset.act,decided_at:new Date().toISOString(),decided_by:state.profile.id}).eq('id',btn.dataset.id);if(error){state.error='Update failed: '+error.message;}render();};});
-  document.getElementById('export-all').onclick=()=>{
+
+  // Fortnight export: current pay week + the following pay week (14 days total)
+  document.getElementById('export-all').onclick=async()=>{
+    const fortnightEnd=isoDate(addDays(state.weekStart,13));
+    const{data:ftHours}=await sb.from('timesheet_entries').select('*').gte('work_date',weekKey).lte('work_date',fortnightEnd);
     let csv='EmployeeName,Date,EarningsRate,Location,StartTime,EndTime,BreakMinutes,TotalHours,Notes\n';
-    hrsRes.data.forEach(h=>{const s=staffById(h.staff_id);if(!s)return;const t=hoursBetween(h.start_time,h.end_time,h.break_minutes);if(t>0)csv+=`"${s.name}","${h.work_date}","Ordinary Hours","${h.location||''}","${h.start_time||''}","${h.end_time||''}","${h.break_minutes||0}","${t.toFixed(2)}","${(h.notes||'').replace(/"/g,'""')}"\n`;});
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`xero_timesheets_week_${weekKey}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+    (ftHours||[]).forEach(h=>{const s=staffById(h.staff_id);if(!s)return;const t=hoursBetween(h.start_time,h.end_time,h.break_minutes);if(t>0)csv+=`"${s.name}","${h.work_date}","Ordinary Hours","${h.location||''}","${h.start_time||''}","${h.end_time||''}","${h.break_minutes||0}","${t.toFixed(2)}","${(h.notes||'').replace(/"/g,'""')}"\n`;});
+    downloadCsv(csv,`xero_fortnight_${weekKey}_to_${fortnightEnd}.csv`);
   };
 }
 
