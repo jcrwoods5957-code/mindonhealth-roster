@@ -211,10 +211,10 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // =====================================================================
-const SUPABASE_URL      = 'https://YOUR_PROJECT.supabase.co';
+const https://qurobfsxfmchmnjpxsqb.supabase.co      = 'https://YOUR_PROJECT.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_9x-EQBdr5mzHwV7JtKGLxQ_b8yq9atc';
 // =====================================================================
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = supabase.createClient(https://qurobfsxfmchmnjpxsqb.supabase.co, SUPABASE_ANON_KEY);
 const LOCATIONS   = ['Parkwood','Oxenford','Pimpama'];
 const DAYS        = ['Wednesday','Thursday','Friday','Monday','Tuesday'];
 const DAY_OFFSETS = [0,1,2,5,6];
@@ -614,7 +614,7 @@ function showAddStaffModal(){
 
     try{
       // Use a non-persistent client so the admin session is preserved
-      const tmpClient=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{
+      const tmpClient=supabase.createClient(https://qurobfsxfmchmnjpxsqb.supabase.co,SUPABASE_ANON_KEY,{
         auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}
       });
       const{data:nu,error:suErr}=await tmpClient.auth.signUp({email,password});
