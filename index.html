@@ -238,7 +238,8 @@ async function loadSession(user){
   if(!r.data){root.innerHTML='<div class="card"><p class="card-title">Account not set up</p><p>Sign-in worked but no staff profile found.</p><button class="btn" onclick="logout()">Sign out</button></div>';return;}
   state.profile = r.data;
   var sr = await sb.from('staff').select('*').order('name');
-  allStaff = sr.data||[];
+  // Webmaster account is excluded from all lists, dropdowns and summaries
+  allStaff = (sr.data||[]).filter(function(s){ return !s.is_webmaster; });
   state.tab = r.data.is_admin ? 'dashboard' : 'roster';
   render();
 }
