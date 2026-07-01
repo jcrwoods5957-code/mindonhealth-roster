@@ -334,10 +334,10 @@ async function saveCell(wkKey, day, loc){
   },{onConflict:'week_start,day_of_week,location'});
 }
 
-function attachRosterHandlers(){
-  document.querySelectorAll('.r-edit').forEach(function(s){s.onchange=function(){saveCell(s.dataset.wk,s.dataset.day,s.dataset.loc);};});
-  document.querySelectorAll('.r-status').forEach(function(s){s.onchange=function(){var td=s.closest('td');var sv=s.value;td.className=sv==='sl'?'cr-sl':sv==='al'?'cr-al':sv==='off'?'cr-off':'';saveCell(s.dataset.wk,s.dataset.day,s.dataset.loc);};});
-  document.querySelectorAll('.r-start,.r-end').forEach(function(inp){inp.onchange=function(){saveCell(inp.dataset.wk,inp.dataset.day,inp.dataset.loc);};});
+function attachRosterHandlers(afterSave){
+  document.querySelectorAll('.r-edit').forEach(function(s){s.onchange=async function(){await saveCell(s.dataset.wk,s.dataset.day,s.dataset.loc);if(afterSave)afterSave();};});
+  document.querySelectorAll('.r-status').forEach(function(s){s.onchange=async function(){var td=s.closest('td');var sv=s.value;td.className=sv==='sl'?'cr-sl':sv==='al'?'cr-al':sv==='off'?'cr-off':'';await saveCell(s.dataset.wk,s.dataset.day,s.dataset.loc);if(afterSave)afterSave();};});
+  document.querySelectorAll('.r-start,.r-end').forEach(function(inp){inp.onchange=async function(){await saveCell(inp.dataset.wk,inp.dataset.day,inp.dataset.loc);if(afterSave)afterSave();};});
 }
 
 // ════════ ADMIN DASHBOARD ════════
@@ -420,18 +420,21 @@ async function renderDashboard(){
   document.querySelectorAll('.btn-approve,.btn-reject').forEach(function(btn){
     btn.onclick=async function(){btn.disabled=true;var r=await sb.from('requests').update({status:btn.dataset.act,decided_at:new Date().toISOString(),decided_by:state.profile.id}).eq('id',btn.dataset.id);if(r.error){state.error='Update failed: '+r.error.message;render();}else{state.flash='Request '+btn.dataset.act+'.';renderDashboard();}};
   });
-  attachRosterHandlers();
-  document.getElementById('act-check').onclick = function(){
+  attachRosterHandlers(renderDashboard);
+  document.getElementById('act-check').onclick = async function(){
+    var freshRows = await loadFortnightRoster(fs);
+    var freshMap = emptyMap();
+    fillMap(freshMap, freshRows, fs);
     var issues = [];
     for(var w=0;w<2;w++){
       var wkStart = addDays(fs, w*7);
       DAYS.forEach(function(day){
         LOCATIONS.forEach(function(loc){
-          var c = map['wk'+w][day][loc];
+          var c = freshMap['wk'+w][day][loc];
           if(!c.staff_id){issues.push({day:wkLabel(fs,w)+' '+day, msg:loc+' -- no staff assigned'});}
           else if(['sl','al'].includes(c.status)){var nm=(staffById(c.staff_id)||{name:'Staff'}).name.split(' ')[0];issues.push({day:wkLabel(fs,w)+' '+day, msg:loc+' -- '+nm+' on '+c.status.toUpperCase()+' needs cover'});}
         });
-        var assigned = LOCATIONS.filter(function(l){var c=map['wk'+w][day][l];return c.staff_id&&c.status!=='off';}).map(function(l){return {id:map['wk'+w][day][l].staff_id,loc:l};});
+        var assigned = LOCATIONS.filter(function(l){var c=freshMap['wk'+w][day][l];return c.staff_id&&c.status!=='off';}).map(function(l){return {id:freshMap['wk'+w][day][l].staff_id,loc:l};});
         var seen=new Set(),dups=new Set();assigned.forEach(function(a){seen.has(a.id)?dups.add(a.id):seen.add(a.id);});
         dups.forEach(function(id){var nm=(staffById(id)||{name:'?'}).name;var locs=assigned.filter(function(a){return a.id===id;}).map(function(a){return a.loc;}).join(' & ');issues.push({day:wkLabel(fs,w)+' '+day, msg:nm+' double-booked ('+locs+')'});});
       });
