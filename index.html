@@ -333,16 +333,17 @@ function buildRosterRows(map, fs, isAdmin, onRefresh){
   return html;
 }
 function attachRosterHandlers(refreshFn){
-  document.querySelectorAll('.r-edit').forEach(function(s){s.onchange=async function(){await saveSlot(s.dataset.wk,s.dataset.day,s.dataset.loc,s.dataset.slot);refreshFn();};});
-  document.querySelectorAll('.r-status').forEach(function(s){s.onchange=async function(){await saveSlot(s.dataset.wk,s.dataset.day,s.dataset.loc,s.dataset.slot);refreshFn();};});
-  document.querySelectorAll('.r-start,.r-end').forEach(function(inp){inp.onchange=async function(){await saveSlot(inp.dataset.wk,inp.dataset.day,inp.dataset.loc,inp.dataset.slot);refreshFn();};});
-  document.querySelectorAll('.slot-remove').forEach(function(btn){btn.onclick=async function(){await removeSlot(btn.dataset.wk,btn.dataset.day,btn.dataset.loc,btn.dataset.slot);refreshFn();};});
+  document.querySelectorAll('.r-edit').forEach(function(s){s.onchange=async function(){var r=await saveSlot(s.dataset.wk,s.dataset.day,s.dataset.loc,s.dataset.slot);if(r&&r.error){state.error='Save failed: '+r.error.message;render();return;}refreshFn();};});
+  document.querySelectorAll('.r-status').forEach(function(s){s.onchange=async function(){var r=await saveSlot(s.dataset.wk,s.dataset.day,s.dataset.loc,s.dataset.slot);if(r&&r.error){state.error='Save failed: '+r.error.message;render();return;}refreshFn();};});
+  document.querySelectorAll('.r-start,.r-end').forEach(function(inp){inp.onchange=async function(){var r=await saveSlot(inp.dataset.wk,inp.dataset.day,inp.dataset.loc,inp.dataset.slot);if(r&&r.error){state.error='Save failed: '+r.error.message;render();return;}refreshFn();};});
+  document.querySelectorAll('.slot-remove').forEach(function(btn){btn.onclick=async function(){var r=await removeSlot(btn.dataset.wk,btn.dataset.day,btn.dataset.loc,btn.dataset.slot);if(r&&r.error){state.error='Remove failed: '+r.error.message;render();return;}refreshFn();};});
   document.querySelectorAll('.add-extra-btn').forEach(function(btn){btn.onclick=async function(){
-    await sb.from('roster').upsert({week_start:btn.dataset.wk,day_of_week:btn.dataset.day,location:btn.dataset.loc,slot:parseInt(btn.dataset.nextSlot),staff_id:null,status:'normal',start_time:'08:30',end_time:'17:00',double_approved:false,updated_at:new Date().toISOString()},{onConflict:'week_start,day_of_week,location,slot'});
+    btn.disabled=true;
+    var r=await sb.from('roster').upsert({week_start:btn.dataset.wk,day_of_week:btn.dataset.day,location:btn.dataset.loc,slot:parseInt(btn.dataset.nextSlot),staff_id:null,status:'normal',start_time:'08:30',end_time:'17:00',double_approved:false,updated_at:new Date().toISOString()},{onConflict:'week_start,day_of_week,location,slot'});
+    if(r.error){state.error='Add extra staff failed: '+r.error.message;render();return;}
     refreshFn();
   };});
 }
-
 // ════════ ADMIN DASHBOARD ════════
 async function renderDashboard(){
   var tc = document.getElementById('tc');
