@@ -686,9 +686,17 @@ function showAddStaffModal(){
       if(su.error)throw su.error;
       if(!su.data.user)throw new Error('Account creation failed. Check the email is not already in use.');
       data.id=su.data.user.id;if(!data.email)data.email=loginEmail;
-      var up=await sb.from('staff').upsert(data,{onConflict:'id'});
-      if(up.error)throw up.error;
-      var sr=await sb.from('staff').select('*').order('name');allStaff=(sr.data||[]).filter(function(s){return !s.is_webmaster;});
+      // Retry the profile save: the database trigger that creates the initial
+      // staff row can take a brief moment to finish committing after signup.
+      var lastErr=null;
+      for(var attempt=0; attempt<6; attempt++){
+        var up = await sb.from('staff').upsert(data,{onConflict:'id'});
+        if(!up.error){ lastErr=null; break; }
+        lastErr = up.error;
+        await new Promise(function(resolve){ setTimeout(resolve, 500); });
+      }
+      if(lastErr) throw lastErr;
+      var sr=await sb.from('staff').select('*').order('name');allStaff=(sr.data||[]).filter(function(s){return !s.is_webmaster && s.is_active!==false;});
       removeModal('staff-modal');state.flash=data.name+' created. Login: '+loginEmail;renderStaff();
     }catch(e){ev.target.disabled=false;ev.target.textContent='Create staff member';errEl.textContent=e.message||'Failed to create account.';}
   };
@@ -703,7 +711,7 @@ function showEditStaffModal(staffId){
     var r=await sb.from('staff').update(data).eq('id',staffId);
     ev.target.disabled=false;ev.target.textContent='Save changes';
     if(r.error){errEl.textContent='Save failed: '+r.error.message;return;}
-    var sr=await sb.from('staff').select('*').order('name');allStaff=(sr.data||[]).filter(function(s){return !s.is_webmaster;});
+    var sr=await sb.from('staff').select('*').order('name');allStaff=(sr.data||[]).filter(function(s){return !s.is_webmaster && s.is_active!==false;});
     removeModal('staff-modal');state.flash=data.name+' updated.';renderStaff();
   };
 }
