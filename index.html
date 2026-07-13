@@ -583,33 +583,24 @@ async function renderRoster(){
 async function renderStaff(){
   var tc = document.getElementById('tc');
   var sr = await sb.from('staff').select('*').order('name');
-  var fullList = (sr.data||[]).filter(function(s){ return !s.is_webmaster; });
-  var activeList = fullList.filter(function(s){ return s.is_active!==false; });
-  var archivedList = fullList.filter(function(s){ return s.is_active===false; });
-  var showArchived = state.showArchived || false;
-  var listToShow = showArchived ? archivedList : activeList;
+  var listToShow = (sr.data||[]).filter(function(s){ return !s.is_webmaster; });
 
   var html = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">';
-  html += '<div><h2 style="font-size:22px;font-weight:700;letter-spacing:-0.4px;margin:0 0 2px;">Staff</h2><p style="font-size:13px;color:var(--text-muted);margin:0;">'+activeList.length+' active'+(archivedList.length?' &middot; '+archivedList.length+' archived':'')+'</p></div>';
-  html += '<button class="btn" id="toggle-archived" style="margin-left:auto;">'+(showArchived?'Show active staff':'Show archived ('+archivedList.length+')')+'</button>';
-  html += '<button class="btn btn-primary" id="add-staff-btn">+ Add staff member</button></div>';
+  html += '<div><h2 style="font-size:22px;font-weight:700;letter-spacing:-0.4px;margin:0 0 2px;">Staff</h2><p style="font-size:13px;color:var(--text-muted);margin:0;">'+listToShow.length+' team members</p></div>';
+  html += '<button class="btn btn-primary" id="add-staff-btn" style="margin-left:auto;">+ Add staff member</button></div>';
 
   if(!listToShow.length){
-    html += '<div class="empty">'+(showArchived?'No archived staff.':'No active staff.')+'</div>';
+    html += '<div class="empty">No staff yet.</div>';
   }
   listToShow.forEach(function(s){
     var bgColor = s.is_admin?'var(--accent-light)':'var(--bg-secondary)';
     var txtColor = s.is_admin?'var(--accent-dark)':'var(--text-muted)';
-    html += '<div class="staff-card"'+(showArchived?' style="opacity:0.65;"':'')+'><div class="staff-card-header" onclick="this.nextElementSibling.classList.toggle(\'open\')">';
+    html += '<div class="staff-card"><div class="staff-card-header" onclick="this.nextElementSibling.classList.toggle(\'open\')">';
     html += '<div class="staff-avatar" style="background:'+bgColor+';color:'+txtColor+';">'+initials(s.name)+'</div>';
-    html += '<div style="flex:1;"><div class="staff-card-name">'+esc(s.name)+(showArchived?' <span style="font-size:11px;font-weight:600;color:var(--text-faint);">(Archived)</span>':'')+'</div><div class="staff-card-role">'+esc(s.role)+(s.is_admin?' &middot; <strong style="color:var(--accent-dark);">Admin</strong>':'')+'</div></div>';
+    html += '<div style="flex:1;"><div class="staff-card-name">'+esc(s.name)+'</div><div class="staff-card-role">'+esc(s.role)+(s.is_admin?' &middot; <strong style="color:var(--accent-dark);">Admin</strong>':'')+'</div></div>';
     html += '<div style="display:flex;gap:8px;align-items:center;">'+(s.phone?'<span style="font-size:13px;color:var(--text-muted);">'+esc(s.phone)+'</span>':'');
-    if(showArchived){
-      html += '<button class="btn btn-sm reactivate-staff-btn" data-id="'+s.id+'" onclick="event.stopPropagation();">Reactivate</button>';
-    } else {
-      html += '<button class="btn btn-sm edit-staff-btn" data-id="'+s.id+'" onclick="event.stopPropagation();">Edit</button>';
-      html += '<button class="btn btn-sm archive-staff-btn" data-id="'+s.id+'" data-name="'+esc(s.name)+'" onclick="event.stopPropagation();" style="color:var(--danger);border-color:rgba(192,57,43,0.3);">Archive</button>';
-    }
+    html += '<button class="btn btn-sm edit-staff-btn" data-id="'+s.id+'" onclick="event.stopPropagation();">Edit</button>';
+    html += '<button class="btn btn-sm delete-staff-btn" data-id="'+s.id+'" data-name="'+esc(s.name)+'" onclick="event.stopPropagation();" style="color:var(--danger);border-color:rgba(192,57,43,0.3);">Delete Staff Member</button>';
     html += '<span style="color:var(--text-faint);font-size:18px;">&#8250;</span></div></div>';
     html += '<div class="staff-card-body"><div class="staff-detail-grid">';
     html += '<div><div class="staff-detail-label">Email</div><div class="staff-detail-value">'+esc(s.email||'--')+'</div></div>';
@@ -623,28 +614,16 @@ async function renderStaff(){
   });
   tc.innerHTML = html;
   document.getElementById('add-staff-btn').onclick = function(){showAddStaffModal();};
-  document.getElementById('toggle-archived').onclick = function(){state.showArchived = !showArchived; renderStaff();};
   document.querySelectorAll('.edit-staff-btn').forEach(function(btn){btn.onclick=function(){showEditStaffModal(btn.dataset.id);};});
-  document.querySelectorAll('.archive-staff-btn').forEach(function(btn){
+  document.querySelectorAll('.delete-staff-btn').forEach(function(btn){
     btn.onclick = async function(){
-      if(!confirm('Archive '+btn.dataset.name+'? They will be hidden from the roster and staff lists, but their timesheet history is kept. You can reactivate them any time.'))return;
-      btn.disabled=true;btn.textContent='Archiving...';
-      var r = await sb.from('staff').update({is_active:false}).eq('id',btn.dataset.id);
-      if(r.error){state.error='Archive failed: '+r.error.message;render();return;}
+      if(!confirm('Permanently delete '+btn.dataset.name+'? This removes them from the roster and staff list, and deletes their timesheet history from this app. This cannot be undone.'))return;
+      btn.disabled=true;btn.textContent='Deleting...';
+      var r = await sb.from('staff').delete().eq('id',btn.dataset.id);
+      if(r.error){state.error='Delete failed: '+r.error.message;render();return;}
       var sr2 = await sb.from('staff').select('*').order('name');
-      allStaff = (sr2.data||[]).filter(function(s){return !s.is_webmaster && s.is_active!==false;});
-      state.flash = btn.dataset.name+' archived.';
-      renderStaff();
-    };
-  });
-  document.querySelectorAll('.reactivate-staff-btn').forEach(function(btn){
-    btn.onclick = async function(){
-      btn.disabled=true;btn.textContent='Reactivating...';
-      var r = await sb.from('staff').update({is_active:true}).eq('id',btn.dataset.id);
-      if(r.error){state.error='Reactivate failed: '+r.error.message;render();return;}
-      var sr2 = await sb.from('staff').select('*').order('name');
-      allStaff = (sr2.data||[]).filter(function(s){return !s.is_webmaster && s.is_active!==false;});
-      state.flash='Staff member reactivated.';
+      allStaff = (sr2.data||[]).filter(function(s){return !s.is_webmaster;});
+      state.flash = btn.dataset.name+' deleted.';
       renderStaff();
     };
   });
@@ -682,20 +661,32 @@ function showAddStaffModal(){
     ev.target.disabled=true;ev.target.textContent='Creating...';
     try{
       var tmpClient=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-      var su=await tmpClient.auth.signUp({email:loginEmail,password:loginPass});
+      // Name/role/admin are sent as signup metadata so the database trigger
+      // sets them the instant the account is created - no race condition.
+      var su=await tmpClient.auth.signUp({
+        email:loginEmail, password:loginPass,
+        options:{ data:{ name:data.name, role:data.role, is_admin:data.is_admin } }
+      });
       if(su.error)throw su.error;
       if(!su.data.user)throw new Error('Account creation failed. Check the email is not already in use.');
       data.id=su.data.user.id;if(!data.email)data.email=loginEmail;
-      // Retry the profile save: the database trigger that creates the initial
-      // staff row can take a brief moment to finish committing after signup.
-      var lastErr=null;
-      for(var attempt=0; attempt<6; attempt++){
-        var up = await sb.from('staff').upsert(data,{onConflict:'id'});
-        if(!up.error){ lastErr=null; break; }
-        lastErr = up.error;
-        await new Promise(function(resolve){ setTimeout(resolve, 500); });
+      // Wait for the profile row to exist before writing the remaining fields
+      var found=false;
+      for(var attempt=0; attempt<10; attempt++){
+        var check = await sb.from('staff').select('id').eq('id',data.id).maybeSingle();
+        if(check.data){ found=true; break; }
+        await new Promise(function(resolve){ setTimeout(resolve, 400); });
       }
-      if(lastErr) throw lastErr;
+      if(!found){
+        state.flash=data.name+' created and can log in now. Add their remaining details from the Staff list in a moment.';
+        removeModal('staff-modal');renderStaff();return;
+      }
+      var up = await sb.from('staff').update({
+        email:data.email, phone:data.phone, date_of_birth:data.date_of_birth,
+        address:data.address, commencement_date:data.commencement_date,
+        emergency_contact_name:data.emergency_contact_name, emergency_contact_phone:data.emergency_contact_phone
+      }).eq('id',data.id);
+      if(up.error)throw up.error;
       var sr=await sb.from('staff').select('*').order('name');allStaff=(sr.data||[]).filter(function(s){return !s.is_webmaster && s.is_active!==false;});
       removeModal('staff-modal');state.flash=data.name+' created. Login: '+loginEmail;renderStaff();
     }catch(e){ev.target.disabled=false;ev.target.textContent='Create staff member';errEl.textContent=e.message||'Failed to create account.';}
