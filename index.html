@@ -303,8 +303,8 @@ function buildRosterRows(map, fs, isAdmin, onRefresh){
             stOpts += '<option value="off"'+(item.status==='off'?' selected':'')+'>Off</option>';
             var rowCls = 'slot-row'+(!item.staff_id?' slot-empty':'');
             html += '<div class="'+rowCls+'">';
-            if(item.staff_id){
-              html += '<button class="slot-remove" data-wk="'+wkKey+'" data-day="'+day+'" data-loc="'+loc+'" data-slot="'+item.slot+'" title="Remove">&#x2715;</button>';
+            if(arr.length){
+              html += '<button class="slot-remove" data-wk="'+wkKey+'" data-day="'+day+'" data-loc="'+loc+'" data-slot="'+item.slot+'" title="Remove this slot">&#x2715;</button>';
             }
             html += '<select data-wk="'+wkKey+'" data-day="'+day+'" data-loc="'+loc+'" data-slot="'+item.slot+'" class="r-edit">'+sOpts+'</select>';
             html += '<select data-wk="'+wkKey+'" data-day="'+day+'" data-loc="'+loc+'" data-slot="'+item.slot+'" class="r-status">'+stOpts+'</select>';
@@ -334,17 +334,16 @@ function buildRosterRows(map, fs, isAdmin, onRefresh){
   return html;
 }
 function attachRosterHandlers(refreshFn){
-  document.querySelectorAll('.r-edit').forEach(function(s){s.onchange=async function(){var r=await saveSlot(s.dataset.wk,s.dataset.day,s.dataset.loc,s.dataset.slot);if(r&&r.error){state.error='Save failed: '+r.error.message;render();return;}refreshFn();};});
-  document.querySelectorAll('.r-status').forEach(function(s){s.onchange=async function(){var r=await saveSlot(s.dataset.wk,s.dataset.day,s.dataset.loc,s.dataset.slot);if(r&&r.error){state.error='Save failed: '+r.error.message;render();return;}refreshFn();};});
-  document.querySelectorAll('.r-start,.r-end').forEach(function(inp){inp.onchange=async function(){var r=await saveSlot(inp.dataset.wk,inp.dataset.day,inp.dataset.loc,inp.dataset.slot);if(r&&r.error){state.error='Save failed: '+r.error.message;render();return;}refreshFn();};});
-  document.querySelectorAll('.slot-remove').forEach(function(btn){btn.onclick=async function(){var r=await removeSlot(btn.dataset.wk,btn.dataset.day,btn.dataset.loc,btn.dataset.slot);if(r&&r.error){state.error='Remove failed: '+r.error.message;render();return;}refreshFn();};});
+  document.querySelectorAll('.r-edit').forEach(function(s){s.onchange=async function(){await saveSlot(s.dataset.wk,s.dataset.day,s.dataset.loc,s.dataset.slot);refreshFn();};});
+  document.querySelectorAll('.r-status').forEach(function(s){s.onchange=async function(){await saveSlot(s.dataset.wk,s.dataset.day,s.dataset.loc,s.dataset.slot);refreshFn();};});
+  document.querySelectorAll('.r-start,.r-end').forEach(function(inp){inp.onchange=async function(){await saveSlot(inp.dataset.wk,inp.dataset.day,inp.dataset.loc,inp.dataset.slot);refreshFn();};});
+  document.querySelectorAll('.slot-remove').forEach(function(btn){btn.onclick=async function(){await removeSlot(btn.dataset.wk,btn.dataset.day,btn.dataset.loc,btn.dataset.slot);refreshFn();};});
   document.querySelectorAll('.add-extra-btn').forEach(function(btn){btn.onclick=async function(){
-    btn.disabled=true;
-    var r=await sb.from('roster').upsert({week_start:btn.dataset.wk,day_of_week:btn.dataset.day,location:btn.dataset.loc,slot:parseInt(btn.dataset.nextSlot),staff_id:null,status:'normal',start_time:'08:30',end_time:'17:00',double_approved:false,updated_at:new Date().toISOString()},{onConflict:'week_start,day_of_week,location,slot'});
-    if(r.error){state.error='Add extra staff failed: '+r.error.message;render();return;}
+    await sb.from('roster').upsert({week_start:btn.dataset.wk,day_of_week:btn.dataset.day,location:btn.dataset.loc,slot:parseInt(btn.dataset.nextSlot),staff_id:null,status:'normal',start_time:'08:30',end_time:'17:00',double_approved:false,updated_at:new Date().toISOString()},{onConflict:'week_start,day_of_week,location,slot'});
     refreshFn();
   };});
 }
+
 // ════════ ADMIN DASHBOARD ════════
 async function renderDashboard(){
   var tc = document.getElementById('tc');
@@ -733,50 +732,106 @@ function showChangePasswordModal(){
   };
 }
 
-// ════════ MY HOURS TAB ════════
+// ════════ MY HOURS TAB (full fortnight, matches Roster) ════════
 async function renderHours(){
   var tc = document.getElementById('tc');
   var fs = state.fnStart;
-  var weekKey = isoDate(fs);
-  var weekEndKey = isoDate(addDays(fs,6));
+  var wk1Key = isoDate(fs);
+  var wk2Key = isoDate(addDays(fs,7));
+  var fnEndKey = isoDate(addDays(fs,13));
   var results = await Promise.all([
-    sb.from('roster').select('*').eq('week_start',weekKey),
-    sb.from('timesheet_entries').select('*').eq('staff_id',state.profile.id).gte('work_date',weekKey).lte('work_date',weekEndKey)
+    loadFortnightRoster(fs),
+    sb.from('timesheet_entries').select('*').eq('staff_id',state.profile.id).gte('work_date',wk1Key).lte('work_date',fnEndKey)
   ]);
-  if(results[0].error||results[1].error){tc.innerHTML='<div class="error">Could not load.</div>';return;}
-  var rmap={};results[0].data.forEach(function(r){if(r.staff_id===state.profile.id)rmap[r.day_of_week]={location:r.location,start_time:t5(r.start_time)||'08:30',end_time:t5(r.end_time)||'17:00'};});
-  var hmap={};results[1].data.forEach(function(h){hmap[h.work_date]=h;});
-  var html='<div class="fn-nav"><button class="btn btn-icon" id="prev-wk">&#8249;</button><span class="fn-label">Pay week  Wed '+fmtDate(fs)+' to Tue '+fmtDate(addDays(fs,6))+'</span><button class="btn btn-icon" id="next-wk">&#8250;</button><button class="btn" id="this-wk" style="margin-left:auto;">This week</button></div>';
-  html+='<div class="card scroll-x"><table class="tbl"><thead><tr><th style="width:100px;">Day</th><th style="width:120px;">Location</th><th style="width:90px;">Start</th><th style="width:90px;">End</th><th style="width:80px;">Break (min)</th><th style="width:70px;">Total</th><th>Notes</th></tr></thead><tbody>';
-  var wt=0;
-  DAYS.forEach(function(day,i){
-    var date=addDays(fs,DAY_OFFSETS[i]);var dKey=isoDate(date);var h=hmap[dKey]||{};var ros=rmap[day];var sl=ros?ros.location:'';
-    var start=h.start_time||(sl?ros.start_time:'');var end=h.end_time||(sl?ros.end_time:'');var brk=h.break_minutes!=null?h.break_minutes:(sl?30:0);var tot=hoursBetween(start,end,brk);wt+=tot;
-    var locOpts='<option value="">--</option>';LOCATIONS.forEach(function(l){locOpts+='<option value="'+l+'"'+((h.location||sl)===l?' selected':'')+'>'+l+'</option>';});
-    html+='<tr data-day="'+dKey+'"><td>'+day+'<div style="font-size:11px;color:var(--text-muted);">'+fmtDate(date)+'</div></td><td><select class="hrs-loc">'+locOpts+'</select></td><td><input class="hrs-start" type="time" value="'+start+'"/></td><td><input class="hrs-end" type="time" value="'+end+'"/></td><td><input class="hrs-break" type="number" min="0" max="180" value="'+brk+'"/></td><td class="hrs-total" style="font-weight:700;">'+tot.toFixed(2)+'</td><td><input class="hrs-notes" type="text" value="'+esc(h.notes||'')+'" placeholder="optional"/></td></tr>';
+  var rosterRows = results[0];
+  var hRes = results[1];
+  if(hRes.error){tc.innerHTML='<div class="error">Could not load.</div>';return;}
+
+  // Map this staff member's own roster assignment per (week_start, day)
+  var rmap = {};
+  rosterRows.forEach(function(r){
+    if(r.staff_id===state.profile.id){
+      rmap[r.week_start+'|'+r.day_of_week] = {location:r.location, start_time:t5(r.start_time)||'08:30', end_time:t5(r.end_time)||'17:00'};
+    }
   });
-  html+='</tbody></table><div style="display:flex;align-items:center;gap:14px;margin-top:16px;flex-wrap:wrap;"><div style="flex:1;min-width:140px;background:var(--accent-light);border-radius:var(--radius);padding:12px;"><div style="font-size:12px;color:var(--accent-dark);font-weight:600;">This pay week total</div><div style="font-size:24px;font-weight:700;color:var(--accent-dark);" id="week-total">'+wt.toFixed(2)+' hrs</div></div><button class="btn btn-primary" id="save-hours">Save timesheet</button><button class="btn" id="export-csv">Download Xero CSV (fortnight)</button></div></div>';
-  tc.innerHTML=html;
-  document.getElementById('prev-wk').onclick=function(){state.fnStart=addDays(state.fnStart,-7);renderHours();};
-  document.getElementById('next-wk').onclick=function(){state.fnStart=addDays(state.fnStart,7);renderHours();};
-  document.getElementById('this-wk').onclick=function(){state.fnStart=getFortnightStart(new Date());renderHours();};
-  function recalc(){var t=0;document.querySelectorAll('tbody tr').forEach(function(tr){var s=tr.querySelector('.hrs-start').value;var e=tr.querySelector('.hrs-end').value;var b=parseInt(tr.querySelector('.hrs-break').value)||0;var v=hoursBetween(s,e,b);tr.querySelector('.hrs-total').textContent=v.toFixed(2);t+=v;});document.getElementById('week-total').textContent=t.toFixed(2)+' hrs';}
+  var hmap = {};
+  hRes.data.forEach(function(h){hmap[h.work_date]=h;});
+
+  var html = '<div class="fn-nav"><button class="btn btn-icon" id="prev-fn">&#8249;</button><span class="fn-label">'+fnLabel(fs)+'</span><button class="btn btn-icon" id="next-fn">&#8250;</button><button class="btn" id="this-fn" style="margin-left:auto;">This fortnight</button></div>';
+  html += '<div class="card scroll-x"><table class="tbl"><thead><tr><th style="width:100px;">Day</th><th style="width:120px;">Location</th><th style="width:90px;">Start</th><th style="width:90px;">End</th><th style="width:80px;">Break (min)</th><th style="width:70px;">Total</th><th>Notes</th></tr></thead><tbody>';
+  var wt = 0;
+  for(var w=0;w<2;w++){
+    var wkStart = addDays(fs, w*7);
+    var wkKey = isoDate(wkStart);
+    html += '<tr class="cr-week-sep"><td colspan="7">'+wkLabel(fs,w)+'</td></tr>';
+    DAYS.forEach(function(day,i){
+      var date = addDays(wkStart, DAY_OFFSETS[i]);
+      var dKey = isoDate(date);
+      var h = hmap[dKey]||{};
+      var ros = rmap[wkKey+'|'+day];
+      var sl = ros ? ros.location : '';
+      var start = h.start_time||(sl?ros.start_time:'');
+      var end = h.end_time||(sl?ros.end_time:'');
+      var brk = h.break_minutes!=null ? h.break_minutes : (sl?30:0);
+      var tot = hoursBetween(start,end,brk);
+      wt += tot;
+      var locOpts = '<option value="">--</option>';
+      LOCATIONS.forEach(function(l){locOpts+='<option value="'+l+'"'+((h.location||sl)===l?' selected':'')+'>'+l+'</option>';});
+      html += '<tr data-day="'+dKey+'"><td>'+day+'<div style="font-size:11px;color:var(--text-muted);">'+fmtDate(date)+'</div></td><td><select class="hrs-loc">'+locOpts+'</select></td><td><input class="hrs-start" type="time" value="'+start+'"/></td><td><input class="hrs-end" type="time" value="'+end+'"/></td><td><input class="hrs-break" type="number" min="0" max="180" value="'+brk+'"/></td><td class="hrs-total" style="font-weight:700;">'+tot.toFixed(2)+'</td><td><input class="hrs-notes" type="text" value="'+esc(h.notes||'')+'" placeholder="optional"/></td></tr>';
+    });
+  }
+  html += '</tbody></table><div style="display:flex;align-items:center;gap:14px;margin-top:16px;flex-wrap:wrap;"><div style="flex:1;min-width:140px;background:var(--accent-light);border-radius:var(--radius);padding:12px;"><div style="font-size:12px;color:var(--accent-dark);font-weight:600;">This fortnight total</div><div style="font-size:24px;font-weight:700;color:var(--accent-dark);" id="week-total">'+wt.toFixed(2)+' hrs</div></div><button class="btn btn-primary" id="save-hours">Save timesheet</button><button class="btn" id="export-csv">Download Xero CSV (fortnight)</button></div></div>';
+  tc.innerHTML = html;
+
+  document.getElementById('prev-fn').onclick = function(){state.fnStart=addDays(state.fnStart,-14);renderHours();};
+  document.getElementById('next-fn').onclick = function(){state.fnStart=addDays(state.fnStart,14);renderHours();};
+  document.getElementById('this-fn').onclick = function(){state.fnStart=getFortnightStart(new Date());renderHours();};
+
+  function dataRows(){
+    return Array.prototype.slice.call(document.querySelectorAll('tbody tr')).filter(function(tr){return tr.dataset.day;});
+  }
+  function recalc(){
+    var t = 0;
+    dataRows().forEach(function(tr){
+      var s = tr.querySelector('.hrs-start').value;
+      var e = tr.querySelector('.hrs-end').value;
+      var b = parseInt(tr.querySelector('.hrs-break').value)||0;
+      var v = hoursBetween(s,e,b);
+      tr.querySelector('.hrs-total').textContent = v.toFixed(2);
+      t += v;
+    });
+    document.getElementById('week-total').textContent = t.toFixed(2)+' hrs';
+  }
   document.querySelectorAll('.hrs-start,.hrs-end,.hrs-break').forEach(function(el){el.oninput=recalc;});
-  document.getElementById('save-hours').onclick=async function(ev){
+
+  document.getElementById('save-hours').onclick = async function(ev){
     ev.target.disabled=true;ev.target.textContent='Saving...';
-    var ro=[];document.querySelectorAll('tbody tr').forEach(function(tr){ro.push({staff_id:state.profile.id,work_date:tr.dataset.day,location:tr.querySelector('.hrs-loc').value||null,start_time:tr.querySelector('.hrs-start').value||null,end_time:tr.querySelector('.hrs-end').value||null,break_minutes:parseInt(tr.querySelector('.hrs-break').value)||0,notes:tr.querySelector('.hrs-notes').value||null,updated_at:new Date().toISOString()});});
-    var r=await sb.from('timesheet_entries').upsert(ro,{onConflict:'staff_id,work_date'});
+    var ro = [];
+    dataRows().forEach(function(tr){
+      ro.push({
+        staff_id: state.profile.id, work_date: tr.dataset.day,
+        location: tr.querySelector('.hrs-loc').value||null,
+        start_time: tr.querySelector('.hrs-start').value||null,
+        end_time: tr.querySelector('.hrs-end').value||null,
+        break_minutes: parseInt(tr.querySelector('.hrs-break').value)||0,
+        notes: tr.querySelector('.hrs-notes').value||null,
+        updated_at: new Date().toISOString()
+      });
+    });
+    var r = await sb.from('timesheet_entries').upsert(ro,{onConflict:'staff_id,work_date'});
     ev.target.disabled=false;ev.target.textContent='Save timesheet';
     if(r.error){state.error='Save failed: '+r.error.message;render();return;}
     state.flash='Timesheet saved.';render();
   };
-  document.getElementById('export-csv').onclick=async function(){
-    var fnStart=isoDate(getFortnightStart(fs));
-    var fnEnd=isoDate(addDays(getFortnightStart(fs),13));
-    var r=await sb.from('timesheet_entries').select('*').eq('staff_id',state.profile.id).gte('work_date',fnStart).lte('work_date',fnEnd);
-    var csv='EmployeeName,Date,EarningsRate,Location,StartTime,EndTime,BreakMinutes,TotalHours,Notes\n';
-    (r.data||[]).forEach(function(h){var t=hoursBetween(h.start_time,h.end_time,h.break_minutes);if(t>0)csv+='"'+state.profile.name+'","'+h.work_date+'","Ordinary Hours","'+(h.location||'')+'","'+(h.start_time||'')+'","'+(h.end_time||'')+'","'+(h.break_minutes||0)+'","'+t.toFixed(2)+'","'+(h.notes||'').replace(/"/g,'""')+'"\n';});
-    downloadCsv(csv,'timesheet_'+state.profile.name.replace(/\s+/g,'_').toLowerCase()+'_fortnight_'+fnStart+'.csv');
+
+  document.getElementById('export-csv').onclick = async function(){
+    var r = await sb.from('timesheet_entries').select('*').eq('staff_id',state.profile.id).gte('work_date',wk1Key).lte('work_date',fnEndKey);
+    var csv = 'EmployeeName,Date,EarningsRate,Location,StartTime,EndTime,BreakMinutes,TotalHours,Notes\n';
+    (r.data||[]).forEach(function(h){
+      var t = hoursBetween(h.start_time,h.end_time,h.break_minutes);
+      if(t>0) csv += '"'+state.profile.name+'","'+h.work_date+'","Ordinary Hours","'+(h.location||'')+'","'+(h.start_time||'')+'","'+(h.end_time||'')+'","'+(h.break_minutes||0)+'","'+t.toFixed(2)+'","'+(h.notes||'').replace(/"/g,'""')+'"\n';
+    });
+    downloadCsv(csv,'timesheet_'+state.profile.name.replace(/\s+/g,'_').toLowerCase()+'_fortnight_'+wk1Key+'.csv');
   };
 }
 
