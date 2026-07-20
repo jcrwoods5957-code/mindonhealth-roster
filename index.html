@@ -45,7 +45,10 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .dash-grid{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start;}
 .cr-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 .cr-table{width:100%;border-collapse:collapse;min-width:560px;}
-.cr-table th{padding:7px 10px;background:var(--bg-secondary);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-bottom:1px solid var(--border);text-align:left;}
+.cr-table th{padding:7px 10px;background:var(--bg-secondary);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-bottom:1px solid var(--border);text-align:left;position:sticky;top:0;z-index:5;}
+.cr-assigned{background:#E5F6EC;}
+.slot-notes{font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;background:white;font-family:inherit;color:var(--text);width:100%;}
+.slot-times select{font-size:12px;padding:4px 3px;}
 .cr-table td{padding:5px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
 .cr-table tr:last-child td{border-bottom:none;}
 .cr-week-sep td{background:var(--bg-secondary);padding:5px 10px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;}
@@ -178,6 +181,18 @@ function fnLabel(fs){return 'Fortnight  Wed '+fmtDate(fs)+' to Tue '+fmtDate(add
 function wkLabel(fs,w){return 'Week '+(w+1)+':  '+fmtDate(addDays(fs,w*7))+' to '+fmtDate(addDays(fs,w*7+6));}
 function downloadCsv(csv,fn){var b=new Blob([csv],{type:'text/csv;charset=utf-8;'});var u=URL.createObjectURL(b);var a=document.createElement('a');a.href=u;a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);}
 function initials(name){return name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();}
+function timeOptions(selected){
+  var out = '';
+  for(var h=6; h<=22; h++){
+    for(var m=0; m<60; m+=15){
+      var hh = (h<10?'0':'')+h;
+      var mm = (m<10?'0':'')+m;
+      var val = hh+':'+mm;
+      out += '<option value="'+val+'"'+(val===selected?' selected':'')+'>'+val+'</option>';
+    }
+  }
+  return out;
+}
 
 function emptyMap(){
   var m = {};
@@ -196,7 +211,7 @@ function fillMap(m, rows, fs){
       m[wk][r.day_of_week][r.location].push({
         staff_id: r.staff_id, status: r.status||'normal',
         start_time: t5(r.start_time)||'08:30', end_time: t5(r.end_time)||'17:00',
-        slot: r.slot||0, double_approved: !!r.double_approved
+        slot: r.slot||0, double_approved: !!r.double_approved, notes: r.notes||''
       });
     }
   });
@@ -212,12 +227,14 @@ async function loadFortnightRoster(fs){
 async function saveSlot(wkKey, day, loc, slot){
   var stf = document.querySelector('.r-edit[data-wk="'+wkKey+'"][data-day="'+day+'"][data-loc="'+loc+'"][data-slot="'+slot+'"]');
   var sts = document.querySelector('.r-status[data-wk="'+wkKey+'"][data-day="'+day+'"][data-loc="'+loc+'"][data-slot="'+slot+'"]');
+  var nt  = document.querySelector('.r-notes[data-wk="'+wkKey+'"][data-day="'+day+'"][data-loc="'+loc+'"][data-slot="'+slot+'"]');
   var st  = document.querySelector('.r-start[data-wk="'+wkKey+'"][data-day="'+day+'"][data-loc="'+loc+'"][data-slot="'+slot+'"]');
   var et  = document.querySelector('.r-end[data-wk="'+wkKey+'"][data-day="'+day+'"][data-loc="'+loc+'"][data-slot="'+slot+'"]');
-  await sb.from('roster').upsert({
+  return await sb.from('roster').upsert({
     week_start: wkKey, day_of_week: day, location: loc, slot: slot,
     staff_id: (stf?stf.value:null)||null,
     status: (sts?sts.value:'normal')||'normal',
+    notes: (nt?nt.value:'')||null,
     start_time: (st?st.value:'08:30')||'08:30',
     end_time: (et?et.value:'17:00')||'17:00',
     double_approved: false,
@@ -225,7 +242,7 @@ async function saveSlot(wkKey, day, loc, slot){
   },{onConflict:'week_start,day_of_week,location,slot'});
 }
 async function removeSlot(wkKey, day, loc, slot){
-  await sb.from('roster').delete().eq('week_start',wkKey).eq('day_of_week',day).eq('location',loc).eq('slot',slot);
+  return await sb.from('roster').delete().eq('week_start',wkKey).eq('day_of_week',day).eq('location',loc).eq('slot',slot);
 }
 async function approveDouble(wkKey, day, staffId){
   await sb.from('roster').update({double_approved:true}).eq('week_start',wkKey).eq('day_of_week',day).eq('staff_id',staffId);
@@ -290,9 +307,9 @@ function buildRosterRows(map, fs, isAdmin, onRefresh){
       LOCATIONS.forEach(function(loc){
         var arr = map[wk][day][loc];
         var active = arr.filter(function(a){return a.staff_id && a.status!=='off';});
-        var tdCls = active.length===0 ? 'cr-empty' : '';
+        var tdCls = active.length===0 ? 'cr-empty' : (active.some(function(a){return a.status==='normal';}) ? 'cr-assigned' : '');
         html += '<td class="'+tdCls+'"><div class="cr-cell">';
-        var displayArr = arr.length ? arr : [{staff_id:null,status:'normal',start_time:'08:30',end_time:'17:00',slot:0}];
+        var displayArr = arr.length ? arr : [{staff_id:null,status:'normal',start_time:'08:30',end_time:'17:00',slot:0,notes:''}];
         if(isAdmin){
           displayArr.forEach(function(item){
             var sOpts = '<option value="">-- empty --</option>';
@@ -308,8 +325,9 @@ function buildRosterRows(map, fs, isAdmin, onRefresh){
             }
             html += '<select data-wk="'+wkKey+'" data-day="'+day+'" data-loc="'+loc+'" data-slot="'+item.slot+'" class="r-edit">'+sOpts+'</select>';
             html += '<select data-wk="'+wkKey+'" data-day="'+day+'" data-loc="'+loc+'" data-slot="'+item.slot+'" class="r-status">'+stOpts+'</select>';
-            html += '<div class="slot-times"><input type="time" data-wk="'+wkKey+'" data-day="'+day+'" data-loc="'+loc+'" data-slot="'+item.slot+'" class="r-start" value="'+item.start_time+'"/><span>-</span>';
-            html += '<input type="time" data-wk="'+wkKey+'" data-day="'+day+'" data-loc="'+loc+'" data-slot="'+item.slot+'" class="r-end" value="'+item.end_time+'"/></div>';
+            html += '<input type="text" data-wk="'+wkKey+'" data-day="'+day+'" data-loc="'+loc+'" data-slot="'+item.slot+'" class="slot-notes r-notes" value="'+esc(item.notes||'')+'" placeholder="Notes"/>';
+            html += '<div class="slot-times"><select data-wk="'+wkKey+'" data-day="'+day+'" data-loc="'+loc+'" data-slot="'+item.slot+'" class="r-start">'+timeOptions(item.start_time)+'</select><span>-</span>';
+            html += '<select data-wk="'+wkKey+'" data-day="'+day+'" data-loc="'+loc+'" data-slot="'+item.slot+'" class="r-end">'+timeOptions(item.end_time)+'</select></div>';
             html += '</div>';
           });
           var maxSlot = arr.length ? Math.max.apply(null, arr.map(function(a){return a.slot;})) : -1;
@@ -322,7 +340,8 @@ function buildRosterRows(map, fs, isAdmin, onRefresh){
             any = true;
             var s = staffById(item.staff_id);
             var badge = item.status!=='normal' ? '<span class="status-badge badge-'+item.status+'">'+item.status.toUpperCase()+'</span>' : '';
-            html += '<div style="font-size:12px;margin-bottom:2px;"><strong>'+(s?esc(s.name.split(' ')[0]):'?')+'</strong>'+badge+'<br><span style="color:var(--text-muted);font-size:11px;">'+item.start_time+' - '+item.end_time+'</span></div>';
+            var noteLine = item.notes ? '<br><span style="color:var(--text-muted);font-size:11px;font-style:italic;">'+esc(item.notes)+'</span>' : '';
+            html += '<div style="font-size:12px;margin-bottom:2px;"><strong>'+(s?esc(s.name.split(' ')[0]):'?')+'</strong>'+badge+'<br><span style="color:var(--text-muted);font-size:11px;">'+item.start_time+' - '+item.end_time+'</span>'+noteLine+'</div>';
           });
           if(!any) html += '<div style="color:var(--text-faint);font-size:12px;">--</div>';
         }
@@ -336,10 +355,11 @@ function buildRosterRows(map, fs, isAdmin, onRefresh){
 function attachRosterHandlers(refreshFn){
   document.querySelectorAll('.r-edit').forEach(function(s){s.onchange=async function(){await saveSlot(s.dataset.wk,s.dataset.day,s.dataset.loc,s.dataset.slot);refreshFn();};});
   document.querySelectorAll('.r-status').forEach(function(s){s.onchange=async function(){await saveSlot(s.dataset.wk,s.dataset.day,s.dataset.loc,s.dataset.slot);refreshFn();};});
+  document.querySelectorAll('.r-notes').forEach(function(inp){inp.onchange=async function(){await saveSlot(inp.dataset.wk,inp.dataset.day,inp.dataset.loc,inp.dataset.slot);refreshFn();};});
   document.querySelectorAll('.r-start,.r-end').forEach(function(inp){inp.onchange=async function(){await saveSlot(inp.dataset.wk,inp.dataset.day,inp.dataset.loc,inp.dataset.slot);refreshFn();};});
   document.querySelectorAll('.slot-remove').forEach(function(btn){btn.onclick=async function(){await removeSlot(btn.dataset.wk,btn.dataset.day,btn.dataset.loc,btn.dataset.slot);refreshFn();};});
   document.querySelectorAll('.add-extra-btn').forEach(function(btn){btn.onclick=async function(){
-    await sb.from('roster').upsert({week_start:btn.dataset.wk,day_of_week:btn.dataset.day,location:btn.dataset.loc,slot:parseInt(btn.dataset.nextSlot),staff_id:null,status:'normal',start_time:'08:30',end_time:'17:00',double_approved:false,updated_at:new Date().toISOString()},{onConflict:'week_start,day_of_week,location,slot'});
+    await sb.from('roster').upsert({week_start:btn.dataset.wk,day_of_week:btn.dataset.day,location:btn.dataset.loc,slot:parseInt(btn.dataset.nextSlot),staff_id:null,status:'normal',notes:null,start_time:'08:30',end_time:'17:00',double_approved:false,updated_at:new Date().toISOString()},{onConflict:'week_start,day_of_week,location,slot'});
     refreshFn();
   };});
 }
@@ -432,7 +452,7 @@ async function renderDashboard(){
     ev.target.disabled=true;ev.target.textContent='Copying...';
     var wk1=isoDate(fs);var wk2=isoDate(addDays(fs,7));
     var prevWk1=isoDate(prevFs);var prevWk2=isoDate(addDays(prevFs,7));
-    var payload = vp.map(function(r){return{week_start:r.week_start===prevWk1?wk1:wk2,day_of_week:r.day_of_week,location:r.location,slot:r.slot||0,staff_id:r.staff_id,status:r.status||'normal',start_time:t5(r.start_time)||'08:30',end_time:t5(r.end_time)||'17:00',double_approved:false,updated_at:new Date().toISOString()};});
+    var payload = vp.map(function(r){return{week_start:r.week_start===prevWk1?wk1:wk2,day_of_week:r.day_of_week,location:r.location,slot:r.slot||0,staff_id:r.staff_id,status:r.status||'normal',notes:r.notes||null,start_time:t5(r.start_time)||'08:30',end_time:t5(r.end_time)||'17:00',double_approved:false,updated_at:new Date().toISOString()};});
     await sb.from('roster').upsert(payload,{onConflict:'week_start,day_of_week,location,slot'});
     ev.target.disabled=false;ev.target.textContent='Copy from previous fortnight';
     state.flash='Fortnight roster copied.';renderDashboard();
@@ -545,7 +565,8 @@ function showPrintModal(){
             var s = staffById(a.staff_id);
             var st = a.status||'normal';
             var badge = st!=='normal' ? '<span class="p-badge p-badge-'+st+'"> ['+st.toUpperCase()+']</span>' : '';
-            return (s?esc(s.name):'?')+badge+'<br><span style="font-size:10px;color:#666;">'+a.start_time+' - '+a.end_time+'</span>';
+            var noteLine = a.notes ? '<br><span style="font-size:9px;color:#888;font-style:italic;">'+esc(a.notes)+'</span>' : '';
+            return (s?esc(s.name):'?')+badge+'<br><span style="font-size:10px;color:#666;">'+a.start_time+' - '+a.end_time+'</span>'+noteLine;
           }).join('<hr style="margin:4px 0;border:none;border-top:1px dashed #ccc;">');
           var cls = active.some(function(a){return a.status!=='normal';}) ? ' class="p-'+active[0].status+'"' : '';
           trows += '<td'+cls+'>'+cellContent+'</td>';
