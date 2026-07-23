@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#1D9E75">
 <title>Mind on Health · Staff Roster</title>
-<link rel="apple-touch-icon" sizes="180x180" href="./mind-on-health-icon-v2.png?v=2">
-<link rel="manifest" href="/manifest.json">  
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 20 Q35 30 35 50 Q35 65 50 75 Q65 65 65 50 Q65 30 50 20 Z' fill='%231D9E75'/%3E%3Ccircle cx='50' cy='55' r='8' fill='%23378ADD'/%3E%3C/svg%3E">
 <style>
 :root{--bg:#f5f5f3;--bg-card:#fff;--bg-secondary:#f0ede6;--text:#1a1a1a;--text-muted:#6b6b6b;--text-faint:#aaa;--border:rgba(0,0,0,0.10);--accent:#1D9E75;--accent-dark:#0F6E56;--accent-light:#E1F5EE;--danger:#C0392B;--danger-light:#FDEDEC;--warning:#E67E22;--warning-light:#FEF5EC;--radius:8px;--radius-lg:14px;--shadow-sm:0 1px 3px rgba(0,0,0,0.07);}
@@ -165,7 +163,9 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 var LOCATIONS = ['Parkwood','Oxenford','Pimpama'];
 var DAYS = ['Wednesday','Thursday','Friday','Monday','Tuesday'];
 var DAY_OFFSETS = [0,1,2,5,6];
+var SANCTUARY_DAY_NAMES = ['Wednesday','Thursday','Friday','Saturday','Sunday','Monday','Tuesday'];
 var FN_ANCHOR = new Date('2026-06-24T00:00:00');
+var sanctuarySites = [];
 
 function getWednesday(d){d=new Date(d);var day=d.getDay();var db=day>=3?day-3:day+4;var m=new Date(d);m.setDate(m.getDate()-db);m.setHours(0,0,0,0);return m;}
 function getFortnightStart(d){var wed=getWednesday(d);var msPerFn=14*24*60*60*1000;var n=Math.floor((wed.getTime()-FN_ANCHOR.getTime())/msPerFn);return new Date(FN_ANCHOR.getTime()+n*msPerFn);}
@@ -183,6 +183,12 @@ function fnLabel(fs){return 'Fortnight  Wed '+fmtDate(fs)+' to Tue '+fmtDate(add
 function wkLabel(fs,w){return 'Week '+(w+1)+':  '+fmtDate(addDays(fs,w*7))+' to '+fmtDate(addDays(fs,w*7+6));}
 function downloadCsv(csv,fn){var b=new Blob([csv],{type:'text/csv;charset=utf-8;'});var u=URL.createObjectURL(b);var a=document.createElement('a');a.href=u;a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);}
 function initials(name){return name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();}
+function timesOverlap(s1,e1,s2,e2){
+  function toMin(t){ var p=t.split(':'); return parseInt(p[0])*60+parseInt(p[1]); }
+  var a1=toMin(s1), a2=toMin(e1); if(a2<=a1) a2+=1440;
+  var b1=toMin(s2), b2=toMin(e2); if(b2<=b1) b2+=1440;
+  return a1<b2 && b1<a2;
+}
 function timeOptions(selected){
   var out = '';
   for(var h=6; h<=22; h++){
@@ -280,6 +286,7 @@ function render(){
   var tabs = [];
   if(state.profile.is_admin){tabs.push({id:'dashboard',label:'Dashboard'});tabs.push({id:'staff',label:'Staff'});}
   tabs.push({id:'roster',label:'Roster'},{id:'hours',label:'My hours'},{id:'requests',label:'Requests'});
+  if(state.profile.is_admin||state.profile.is_sanctuary_admin||state.profile.is_sanctuary_staff){tabs.push({id:'sanctuary',label:'The Sanctuary'});}
   var html = '<div class="tabs">';
   tabs.forEach(function(t){html+='<button class="tab '+(state.tab===t.id?'active':'')+'" data-tab="'+t.id+'">'+t.label+'</button>';});
   html += '</div>';
@@ -293,6 +300,7 @@ function render(){
   else if(state.tab==='roster') renderRoster();
   else if(state.tab==='hours') renderHours();
   else if(state.tab==='requests') renderRequests();
+  else if(state.tab==='sanctuary') renderSanctuary();
 }
 
 // Build the roster table rows (used by both Dashboard and Roster tab)
@@ -659,6 +667,7 @@ function buildStaffForm(prefix,s){
   html+='<div class="row"><label class="label">Position</label><input id="'+prefix+'-role" class="input" type="text" style="flex:1;" value="'+(s?v('role'):'Receptionist')+'"/></div>';
   html+='<div class="row"><label class="label">Email</label><input id="'+prefix+'-email" class="input" type="email" style="flex:1;" value="'+v('email')+'"/></div>';
   html+='<div class="row"><label class="label">Admin access</label><label style="display:flex;align-items:center;gap:8px;font-size:14px;"><input id="'+prefix+'-admin" type="checkbox"'+(s&&s.is_admin?' checked':'')+'/> Full admin dashboard access</label></div>';
+  html+='<div class="row"><label class="label">Sanctuary</label><label style="display:flex;align-items:center;gap:8px;font-size:14px;"><input id="'+prefix+'-sanctuary" type="checkbox"'+(s&&s.is_sanctuary_staff?' checked':'')+'/> Assigned to The Sanctuary</label></div>';
   html+='<div class="row"><label class="label">Mobile</label><input id="'+prefix+'-phone" class="input" type="tel" style="flex:1;" value="'+v('phone')+'"/></div>';
   html+='<div class="row"><label class="label">Date of birth</label><input id="'+prefix+'-dob" class="input" type="date" style="flex:1;" value="'+(s&&s.date_of_birth?s.date_of_birth:'')+'"/></div>';
   html+='<div class="row"><label class="label">Address</label><input id="'+prefix+'-address" class="input" type="text" style="flex:1;" value="'+v('address')+'"/></div>';
@@ -670,7 +679,7 @@ function buildStaffForm(prefix,s){
   return html;
 }
 function getFormData(prefix){
-  return{name:document.getElementById(prefix+'-name').value.trim(),role:document.getElementById(prefix+'-role').value.trim()||'Receptionist',email:document.getElementById(prefix+'-email').value.trim()||null,is_admin:document.getElementById(prefix+'-admin').checked,phone:document.getElementById(prefix+'-phone').value.trim()||null,date_of_birth:document.getElementById(prefix+'-dob').value||null,address:document.getElementById(prefix+'-address').value.trim()||null,commencement_date:document.getElementById(prefix+'-start').value||null,emergency_contact_name:document.getElementById(prefix+'-ec-name').value.trim()||null,emergency_contact_phone:document.getElementById(prefix+'-ec-phone').value.trim()||null};
+  return{name:document.getElementById(prefix+'-name').value.trim(),role:document.getElementById(prefix+'-role').value.trim()||'Receptionist',email:document.getElementById(prefix+'-email').value.trim()||null,is_admin:document.getElementById(prefix+'-admin').checked,is_sanctuary_staff:document.getElementById(prefix+'-sanctuary').checked,phone:document.getElementById(prefix+'-phone').value.trim()||null,date_of_birth:document.getElementById(prefix+'-dob').value||null,address:document.getElementById(prefix+'-address').value.trim()||null,commencement_date:document.getElementById(prefix+'-start').value||null,emergency_contact_name:document.getElementById(prefix+'-ec-name').value.trim()||null,emergency_contact_phone:document.getElementById(prefix+'-ec-phone').value.trim()||null};
 }
 function showAddStaffModal(){
   var formHtml='<p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin:0 0 10px;">Login account</p><div class="row"><label class="label">Email</label><input id="ns-login-email" class="input" type="email" style="flex:1;" placeholder="staff@example.com"/></div><div class="row"><label class="label">Temp password</label><input id="ns-login-pass" class="input" type="text" style="flex:1;" placeholder="Min 6 characters"/></div><hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">'+buildStaffForm('ns',null);
@@ -881,6 +890,356 @@ async function renderRequests(){
     var ins=await sb.from('requests').insert({staff_id:state.profile.id,type:type,from_date:from,to_date:to||null,reason:reason||null,location:(type==='location'||type==='roster')?document.getElementById('req-loc').value:null,swap_with:type==='swap'?document.getElementById('req-swap').value||null:null});
     ev.target.disabled=false;if(ins.error){state.error='Submit failed: '+ins.error.message;render();return;}
     state.flash='Request submitted.';render();
+  };
+}
+
+// ════════ THE SANCTUARY ════════
+async function loadSanctuaryFortnight(fs){
+  var wkEnd = isoDate(addDays(fs,13));
+  var r = await sb.from('sanctuary_roster').select('*').gte('shift_date',isoDate(fs)).lte('shift_date',wkEnd);
+  return r.data||[];
+}
+function emptySanctuaryMap(fs){
+  var m = {};
+  for(var i=0;i<14;i++){
+    var dKey = isoDate(addDays(fs,i));
+    m[dKey] = {};
+    sanctuarySites.forEach(function(site){ m[dKey][site.id] = []; });
+  }
+  return m;
+}
+function fillSanctuaryMap(m, rows){
+  rows.forEach(function(r){
+    if(m[r.shift_date] && m[r.shift_date][r.site_id]!=null){
+      m[r.shift_date][r.site_id].push({staff_id:r.staff_id, start_time:t5(r.start_time)||'', end_time:t5(r.end_time)||'', slot:r.slot||0, notes:r.notes||'', overnight:!!r.overnight, double_approved:!!r.double_approved});
+    }
+  });
+  Object.keys(m).forEach(function(dKey){
+    Object.keys(m[dKey]).forEach(function(siteId){ m[dKey][siteId].sort(function(a,b){return a.slot-b.slot;}); });
+  });
+}
+async function saveSanctuarySlot(dateKey, siteId, slot){
+  var stf = document.querySelector('.sr-edit[data-date="'+dateKey+'"][data-site="'+siteId+'"][data-slot="'+slot+'"]');
+  var nt  = document.querySelector('.sr-notes[data-date="'+dateKey+'"][data-site="'+siteId+'"][data-slot="'+slot+'"]');
+  var st  = document.querySelector('.sr-start[data-date="'+dateKey+'"][data-site="'+siteId+'"][data-slot="'+slot+'"]');
+  var et  = document.querySelector('.sr-end[data-date="'+dateKey+'"][data-site="'+siteId+'"][data-slot="'+slot+'"]');
+  var stVal = st?st.value:'';
+  var etVal = et?et.value:'';
+  var overnight = !!(stVal && etVal && etVal<=stVal);
+  return await sb.from('sanctuary_roster').upsert({
+    shift_date: dateKey, site_id: parseInt(siteId), slot: parseInt(slot),
+    staff_id: (stf?stf.value:null)||null,
+    start_time: stVal||null, end_time: etVal||null,
+    overnight: overnight,
+    notes: (nt?nt.value:'')||null,
+    double_approved: false,
+    updated_at: new Date().toISOString()
+  },{onConflict:'shift_date,site_id,slot'});
+}
+async function removeSanctuarySlot(dateKey, siteId, slot){
+  return await sb.from('sanctuary_roster').delete().eq('shift_date',dateKey).eq('site_id',siteId).eq('slot',slot);
+}
+function buildSanctuaryRosterRows(map, fs, isManager, visibleSiteIds){
+  var html = '';
+  var activeSites = sanctuarySites.filter(function(s){ return isManager || (visibleSiteIds && visibleSiteIds.indexOf(s.id)!==-1); });
+  for(var i=0;i<14;i++){
+    var date = addDays(fs,i);
+    var dKey = isoDate(date);
+    if(i===0){ html += '<tr class="cr-week-sep"><td colspan="'+(activeSites.length+1)+'">Week 1</td></tr>'; }
+    if(i===7){ html += '<tr class="cr-week-sep"><td colspan="'+(activeSites.length+1)+'">Week 2</td></tr>'; }
+    html += '<tr><td><div class="cr-day">'+SANCTUARY_DAY_NAMES[i%7]+'</div><div class="cr-date">'+fmtDate(date)+'</div></td>';
+    activeSites.forEach(function(site){
+      var arr = map[dKey] ? (map[dKey][site.id]||[]) : [];
+      var active = arr.filter(function(a){return a.staff_id;});
+      var tdCls = !site.name ? '' : (active.length===0 ? 'cr-empty' : 'cr-assigned');
+      html += '<td class="'+tdCls+'"><div class="cr-cell">';
+      if(isManager){
+        var displayArr = arr.length ? arr : [{staff_id:null,start_time:'',end_time:'',slot:0,notes:''}];
+        displayArr.forEach(function(item){
+          var sOpts = '<option value="">-- empty --</option>';
+          allStaff.filter(function(s){return s.is_sanctuary_staff;}).forEach(function(s){sOpts+='<option value="'+s.id+'"'+(item.staff_id===s.id?' selected':'')+'>'+esc(s.name.split(' ')[0])+'</option>';});
+          html += '<div class="slot-row'+(!item.staff_id?' slot-empty':'')+'">';
+          if(arr.length){ html += '<button class="slot-remove sanc-remove" data-date="'+dKey+'" data-site="'+site.id+'" data-slot="'+item.slot+'" title="Remove this shift">&#x2715;</button>'; }
+          html += '<select data-date="'+dKey+'" data-site="'+site.id+'" data-slot="'+item.slot+'" class="sr-edit">'+sOpts+'</select>';
+          html += '<input type="text" data-date="'+dKey+'" data-site="'+site.id+'" data-slot="'+item.slot+'" class="slot-notes sr-notes" value="'+esc(item.notes||'')+'" placeholder="Notes"/>';
+          html += '<div class="slot-times"><select data-date="'+dKey+'" data-site="'+site.id+'" data-slot="'+item.slot+'" class="sr-start">'+timeOptions(item.start_time)+'</select><span>-</span>';
+          html += '<select data-date="'+dKey+'" data-site="'+site.id+'" data-slot="'+item.slot+'" class="sr-end">'+timeOptions(item.end_time)+'</select></div>';
+          html += '</div>';
+        });
+        var maxSlot = arr.length ? Math.max.apply(null, arr.map(function(a){return a.slot;})) : -1;
+        html += '<button class="add-extra-btn sanc-add" data-date="'+dKey+'" data-site="'+site.id+'" data-next-slot="'+(maxSlot+1)+'">+ Add shift</button>';
+      } else {
+        if(!active.length){ html += '<div style="color:var(--text-faint);font-size:12px;">--</div>'; }
+        active.forEach(function(item){
+          var s = staffById(item.staff_id);
+          var noteLine = item.notes ? '<br><span style="font-size:11px;color:var(--text-muted);font-style:italic;">'+esc(item.notes)+'</span>' : '';
+          html += '<div style="font-size:12px;margin-bottom:2px;"><strong>'+(s?esc(s.name.split(' ')[0]):'?')+'</strong><br><span style="color:var(--text-muted);font-size:11px;">'+item.start_time+' - '+item.end_time+(item.overnight?' (+1 day)':'')+'</span>'+noteLine+'</div>';
+        });
+      }
+      html += '</div></td>';
+    });
+    html += '</tr>';
+  }
+  return html;
+}
+function attachSanctuaryHandlers(refreshFn){
+  document.querySelectorAll('.sr-edit,.sr-notes,.sr-start,.sr-end').forEach(function(el){
+    el.onchange = async function(){ var r=await saveSanctuarySlot(el.dataset.date,el.dataset.site,el.dataset.slot); if(r&&r.error){state.error='Save failed: '+r.error.message;render();return;} refreshFn(); };
+  });
+  document.querySelectorAll('.sanc-remove').forEach(function(btn){
+    btn.onclick = async function(){ var r=await removeSanctuarySlot(btn.dataset.date,btn.dataset.site,btn.dataset.slot); if(r&&r.error){state.error='Remove failed: '+r.error.message;render();return;} refreshFn(); };
+  });
+  document.querySelectorAll('.sanc-add').forEach(function(btn){
+    btn.onclick = async function(){
+      btn.disabled = true;
+      var r = await sb.from('sanctuary_roster').upsert({shift_date:btn.dataset.date, site_id:parseInt(btn.dataset.site), slot:parseInt(btn.dataset.nextSlot), staff_id:null, start_time:null, end_time:null, notes:null, overnight:false, double_approved:false, updated_at:new Date().toISOString()},{onConflict:'shift_date,site_id,slot'});
+      if(r.error){state.error='Add shift failed: '+r.error.message;render();return;}
+      refreshFn();
+    };
+  });
+}
+async function renderSanctuary(){
+  var sr = await sb.from('sanctuary_sites').select('*').order('id');
+  sanctuarySites = sr.data || [];
+  var isManager = state.profile.is_admin || state.profile.is_sanctuary_admin;
+  if(isManager){ renderSanctuaryDashboard(); } else { renderSanctuaryStaffView(); }
+}
+async function renderSanctuaryStaffView(){
+  var tc = document.getElementById('tc');
+  var fs = state.fnStart;
+  var assign = await sb.from('sanctuary_staff_sites').select('site_id').eq('staff_id', state.profile.id);
+  var mySiteIds = (assign.data||[]).map(function(r){return r.site_id;});
+  if(!mySiteIds.length){ tc.innerHTML = '<div class="empty">You are not yet assigned to a Sanctuary site. Ask your admin to assign you.</div>'; return; }
+  var rows = await loadSanctuaryFortnight(fs);
+  var map = emptySanctuaryMap(fs);
+  fillSanctuaryMap(map, rows);
+  var visibleSites = sanctuarySites.filter(function(s){return mySiteIds.indexOf(s.id)!==-1;});
+  var html = '<div class="fn-nav"><button class="btn btn-icon" id="prev-fn">&#8249;</button><span class="fn-label">'+fnLabel(fs)+'</span><button class="btn btn-icon" id="next-fn">&#8250;</button><button class="btn" id="this-fn" style="margin-left:auto;">This fortnight</button></div>';
+  html += '<div class="card scroll-x"><table class="cr-table"><thead><tr><th style="width:90px;">Day</th>';
+  visibleSites.forEach(function(s){ html += '<th>'+esc(s.name||('Site '+s.id))+'</th>'; });
+  html += '</tr></thead><tbody>';
+  html += buildSanctuaryRosterRows(map, fs, false, mySiteIds);
+  html += '</tbody></table></div>';
+  tc.innerHTML = html;
+  document.getElementById('prev-fn').onclick=function(){state.fnStart=addDays(state.fnStart,-14);renderSanctuaryStaffView();};
+  document.getElementById('next-fn').onclick=function(){state.fnStart=addDays(state.fnStart,14);renderSanctuaryStaffView();};
+  document.getElementById('this-fn').onclick=function(){state.fnStart=getFortnightStart(new Date());renderSanctuaryStaffView();};
+}
+async function renderSanctuaryDashboard(){
+  var tc = document.getElementById('tc');
+  var fs = state.fnStart;
+  var rows = await loadSanctuaryFortnight(fs);
+  var map = emptySanctuaryMap(fs);
+  fillSanctuaryMap(map, rows);
+
+  var html = '<div class="dash-header"><div><h1 class="dash-title">The Sanctuary</h1><p class="dash-period">'+fnLabel(fs)+'</p></div>';
+  html += '<div class="dash-week-nav"><button class="btn btn-icon" id="prev-fn">&#8249;</button><button class="btn" id="this-fn">This fortnight</button><button class="btn btn-icon" id="next-fn">&#8250;</button></div></div>';
+
+  html += '<div class="card" style="padding:16px 18px;"><p class="card-title" style="margin-bottom:10px;">Site names</p><div class="row" style="flex-wrap:wrap;">';
+  sanctuarySites.forEach(function(s){
+    html += '<div style="flex:1;min-width:160px;"><label class="label" style="display:block;margin-bottom:4px;">Site '+s.id+'</label><input class="input site-name-input" data-site="'+s.id+'" type="text" style="width:100%;" value="'+esc(s.name||'')+'" placeholder="Not yet named"/></div>';
+  });
+  html += '</div><p style="font-size:11px;color:var(--text-muted);margin:10px 0 0;">A site is only included in roster checks once it has a name.</p></div>';
+
+  html += '<div class="action-strip">';
+  html += '<button class="btn btn-primary" id="sanc-export">Save Xero CSV</button>';
+  html += '<button class="btn" id="sanc-check">Check Roster</button>';
+  html += '<button class="btn" id="sanc-pdf">Export PDF</button>';
+  html += '<button class="btn" id="sanc-access" style="margin-left:auto;">Manage Access</button>';
+  html += '</div>';
+
+  html += '<div class="card scroll-x"><table class="cr-table"><thead><tr><th style="width:90px;">Day</th>';
+  sanctuarySites.forEach(function(s){ html += '<th>'+esc(s.name||('Site '+s.id+' (unnamed)'))+'</th>'; });
+  html += '</tr></thead><tbody>';
+  html += buildSanctuaryRosterRows(map, fs, true, null);
+  html += '</tbody></table></div>';
+
+  tc.innerHTML = html;
+
+  document.getElementById('prev-fn').onclick=function(){state.fnStart=addDays(state.fnStart,-14);renderSanctuaryDashboard();};
+  document.getElementById('next-fn').onclick=function(){state.fnStart=addDays(state.fnStart,14);renderSanctuaryDashboard();};
+  document.getElementById('this-fn').onclick=function(){state.fnStart=getFortnightStart(new Date());renderSanctuaryDashboard();};
+
+  document.querySelectorAll('.site-name-input').forEach(function(inp){
+    inp.onchange = async function(){
+      await sb.from('sanctuary_sites').update({name: inp.value.trim()||null}).eq('id', inp.dataset.site);
+      renderSanctuaryDashboard();
+    };
+  });
+
+  attachSanctuaryHandlers(renderSanctuaryDashboard);
+
+  document.getElementById('sanc-check').onclick = function(){ checkSanctuaryRoster(fs); };
+  document.getElementById('sanc-pdf').onclick = function(){ showSanctuaryPrintModal(); };
+  document.getElementById('sanc-access').onclick = function(){ showSanctuaryAccessModal(); };
+  document.getElementById('sanc-export').onclick = async function(){
+    var fnEnd = isoDate(addDays(fs,13));
+    var r = await sb.from('sanctuary_timesheet_entries').select('*').gte('work_date',isoDate(fs)).lte('work_date',fnEnd);
+    var csv = 'EmployeeName,Date,EarningsRate,Site,StartTime,EndTime,BreakMinutes,TotalHours,Notes\n';
+    (r.data||[]).forEach(function(h){
+      var s = staffById(h.staff_id); if(!s) return;
+      var t = hoursBetween(h.start_time,h.end_time,h.break_minutes);
+      var siteName = (sanctuarySites.find(function(x){return x.id===h.site_id;})||{}).name || ('Site '+h.site_id);
+      if(t>0) csv += '"'+s.name+'","'+h.work_date+'","Ordinary Hours","'+siteName+'","'+(h.start_time||'')+'","'+(h.end_time||'')+'","'+(h.break_minutes||0)+'","'+t.toFixed(2)+'","'+(h.notes||'').replace(/"/g,'""')+'"\n';
+    });
+    downloadCsv(csv,'sanctuary_xero_fortnight_'+isoDate(fs)+'.csv');
+  };
+}
+async function checkSanctuaryRoster(fs){
+  var rows = await loadSanctuaryFortnight(fs);
+  var map = emptySanctuaryMap(fs);
+  fillSanctuaryMap(map, rows);
+  var mohRows = await loadFortnightRoster(fs);
+  var issues = [];
+  var activeSites = sanctuarySites.filter(function(s){return s.name;});
+
+  for(var i=0;i<14;i++){
+    var date = addDays(fs,i);
+    var dKey = isoDate(date);
+    var dayLabel = SANCTUARY_DAY_NAMES[i%7]+' '+fmtDate(date);
+
+    activeSites.forEach(function(site){
+      var arr = (map[dKey]&&map[dKey][site.id])||[];
+      var active = arr.filter(function(a){return a.staff_id;});
+      if(!active.length){ issues.push({label:dayLabel, msg: esc(site.name)+' -- no staff assigned'}); }
+    });
+
+    var allActive = [];
+    sanctuarySites.forEach(function(site){
+      ((map[dKey]&&map[dKey][site.id])||[]).forEach(function(a){
+        if(a.staff_id && a.start_time && a.end_time) allActive.push({staff_id:a.staff_id, site:site.name||('Site '+site.id), start:a.start_time, end:a.end_time, double_approved:a.double_approved});
+      });
+    });
+    var byStaff = {};
+    allActive.forEach(function(a){ if(!byStaff[a.staff_id]) byStaff[a.staff_id]=[]; byStaff[a.staff_id].push(a); });
+    Object.keys(byStaff).forEach(function(sid){
+      var shifts = byStaff[sid];
+      for(var x=0;x<shifts.length;x++){
+        for(var y=x+1;y<shifts.length;y++){
+          if(timesOverlap(shifts[x].start,shifts[x].end,shifts[y].start,shifts[y].end) && !(shifts[x].double_approved&&shifts[y].double_approved)){
+            var nm=(staffById(sid)||{name:'?'}).name;
+            issues.push({label:dayLabel, msg: nm+' double-booked at Sanctuary ('+shifts[x].site+' & '+shifts[y].site+')'});
+          }
+        }
+      }
+    });
+
+    var mohForDate = [];
+    DAYS.forEach(function(day, di){
+      for(var w=0; w<2; w++){
+        var wkStart = addDays(fs, w*7);
+        var mohDate = isoDate(addDays(wkStart, DAY_OFFSETS[di]));
+        if(mohDate === dKey){
+          mohRows.forEach(function(r){
+            if(r.day_of_week===day && r.week_start===isoDate(wkStart) && r.staff_id && r.status!=='off'){
+              mohForDate.push({staff_id:r.staff_id, start:t5(r.start_time)||'08:30', end:t5(r.end_time)||'17:00'});
+            }
+          });
+        }
+      }
+    });
+    allActive.forEach(function(sa){
+      mohForDate.forEach(function(ma){
+        if(sa.staff_id===ma.staff_id && timesOverlap(sa.start,sa.end,ma.start,ma.end)){
+          var nm=(staffById(sa.staff_id)||{name:'?'}).name;
+          issues.push({label:dayLabel, msg: nm+' is rostered at MOH ('+ma.start+'-'+ma.end+') and Sanctuary ('+sa.site+', '+sa.start+'-'+sa.end+') at the same time'});
+        }
+      });
+    });
+  }
+  showSanctuaryCheckModal(issues);
+}
+function showSanctuaryCheckModal(issues){
+  removeModal('sanc-check-modal');
+  var body = '';
+  if(!issues.length){
+    body = '<div style="text-align:center;padding:20px;"><div style="font-size:44px;margin-bottom:10px;">&#9989;</div><p style="font-weight:700;margin:0 0 4px;font-size:16px;">All clear!</p><p style="color:var(--text-muted);font-size:13px;margin:0;">No conflicts for this fortnight.</p></div>';
+  } else {
+    var byDay = {};
+    issues.forEach(function(i){ if(!byDay[i.label]) byDay[i.label]=[]; byDay[i.label].push(i.msg); });
+    Object.keys(byDay).forEach(function(d){ body += '<p class="check-day">'+esc(d)+'</p>'; byDay[d].forEach(function(m){ body += '<p class="check-issue"><span>'+esc(m)+'</span></p>'; }); });
+  }
+  document.body.insertAdjacentHTML('beforeend','<div class="overlay" id="sanc-check-modal" onclick="if(event.target===this)removeModal(\'sanc-check-modal\')"><div class="modal"><div style="display:flex;align-items:center;margin-bottom:14px;"><p class="modal-title" style="margin:0;flex:1;">Sanctuary roster check</p><button class="modal-close" onclick="removeModal(\'sanc-check-modal\')">&#x2715;</button></div>'+body+'<div style="text-align:right;margin-top:18px;"><button class="btn btn-primary" onclick="removeModal(\'sanc-check-modal\')">Done</button></div></div></div>');
+}
+function showSanctuaryPrintModal(){
+  var fs = state.fnStart;
+  document.body.insertAdjacentHTML('beforeend','<div class="overlay" id="sanc-print-modal" onclick="if(event.target===this)removeModal(\'sanc-print-modal\')"><div class="modal"><div style="display:flex;align-items:center;margin-bottom:16px;"><p class="modal-title" style="margin:0;flex:1;">Export Sanctuary Roster PDF</p><button class="modal-close" onclick="removeModal(\'sanc-print-modal\')">&#x2715;</button></div><p style="font-size:13px;margin:0 0 16px;">Print the full fortnight: <strong>'+fnLabel(fs)+'</strong></p><div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn" onclick="removeModal(\'sanc-print-modal\')">Cancel</button><button class="btn btn-primary" id="sanc-print-go">Print roster</button></div></div></div>');
+  document.getElementById('sanc-print-go').onclick = async function(){
+    removeModal('sanc-print-modal');
+    var rows = await loadSanctuaryFortnight(fs);
+    var map = emptySanctuaryMap(fs);
+    fillSanctuaryMap(map, rows);
+    var namedSites = sanctuarySites.filter(function(s){return s.name;});
+    var trows = '';
+    for(var i=0;i<14;i++){
+      var date = addDays(fs,i);
+      var dKey = isoDate(date);
+      if(i===0) trows += '<tr class="p-wk-sep"><td colspan="'+(namedSites.length+2)+'">Week 1</td></tr>';
+      if(i===7) trows += '<tr class="p-wk-sep"><td colspan="'+(namedSites.length+2)+'">Week 2</td></tr>';
+      trows += '<tr><td style="font-weight:700;white-space:nowrap;">'+SANCTUARY_DAY_NAMES[i%7]+'</td><td style="font-size:10px;white-space:nowrap;">'+fmtFull(date)+'</td>';
+      namedSites.forEach(function(site){
+        var arr = ((map[dKey]&&map[dKey][site.id])||[]).filter(function(a){return a.staff_id;});
+        if(!arr.length){ trows += '<td>--</td>'; return; }
+        var content = arr.map(function(a){
+          var s = staffById(a.staff_id);
+          var noteLine = a.notes ? '<br><span style="font-size:9px;color:#888;font-style:italic;">'+esc(a.notes)+'</span>' : '';
+          return (s?esc(s.name):'?')+'<br><span style="font-size:10px;color:#666;">'+a.start_time+' - '+a.end_time+(a.overnight?' (+1d)':'')+'</span>'+noteLine;
+        }).join('<hr style="margin:4px 0;border:none;border-top:1px dashed #ccc;">');
+        trows += '<td>'+content+'</td>';
+      });
+      trows += '</tr>';
+    }
+    var headerCols = '<th>Day</th><th>Date</th>';
+    namedSites.forEach(function(s){ headerCols += '<th>'+esc(s.name)+'</th>'; });
+    document.getElementById('print-view').innerHTML = '<h1>The Sanctuary</h1><h2>Staff Roster</h2><p class="print-meta">'+fnLabel(fs)+' &nbsp;&middot;&nbsp; Printed '+new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'})+'</p><table><thead><tr>'+headerCols+'</tr></thead><tbody>'+trows+'</tbody></table>';
+    setTimeout(function(){window.print();},120);
+  };
+}
+function showSanctuaryAccessModal(){
+  var html = '<div class="overlay" id="sanc-access-modal" onclick="if(event.target===this)removeModal(\'sanc-access-modal\')"><div class="modal" style="max-width:640px;"><div style="display:flex;align-items:center;margin-bottom:16px;"><p class="modal-title" style="margin:0;flex:1;">Manage Sanctuary Access</p><button class="modal-close" onclick="removeModal(\'sanc-access-modal\')">&#x2715;</button></div><div class="scroll-x"><table class="tbl"><thead><tr><th>Staff</th><th>Assigned</th><th>Admin</th><th>Site 1</th><th>Site 2</th><th>Site 3</th><th>Site 4</th></tr></thead><tbody>';
+  allStaff.forEach(function(s){
+    html += '<tr><td>'+esc(s.name)+'</td>';
+    html += '<td><input type="checkbox" class="sanc-assigned-cb" data-staff="'+s.id+'" '+(s.is_sanctuary_staff?'checked':'')+'/></td>';
+    html += '<td><input type="checkbox" class="sanc-admin-cb" data-staff="'+s.id+'" '+(s.is_sanctuary_admin?'checked':'')+'/></td>';
+    for(var i=1;i<=4;i++){
+      html += '<td><input type="checkbox" class="sanc-site-cb" data-staff="'+s.id+'" data-site="'+i+'"/></td>';
+    }
+    html += '</tr>';
+  });
+  html += '</tbody></table></div><div id="sanc-access-err" style="color:var(--danger);font-size:13px;min-height:18px;margin:8px 0;"></div><div style="text-align:right;margin-top:10px;"><button class="btn btn-primary" id="sanc-access-save">Save changes</button></div></div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+  sb.from('sanctuary_staff_sites').select('*').then(function(r){
+    (r.data||[]).forEach(function(row){
+      var cb = document.querySelector('.sanc-site-cb[data-staff="'+row.staff_id+'"][data-site="'+row.site_id+'"]');
+      if(cb) cb.checked = true;
+    });
+  });
+  document.getElementById('sanc-access-save').onclick = async function(ev){
+    ev.target.disabled = true; ev.target.textContent = 'Saving...';
+    var errEl = document.getElementById('sanc-access-err');
+    var promises = [];
+    document.querySelectorAll('.sanc-assigned-cb').forEach(function(cb){
+      promises.push(sb.from('staff').update({is_sanctuary_staff: cb.checked}).eq('id', cb.dataset.staff));
+    });
+    document.querySelectorAll('.sanc-admin-cb').forEach(function(cb){
+      promises.push(sb.from('staff').update({is_sanctuary_admin: cb.checked}).eq('id', cb.dataset.staff));
+    });
+    document.querySelectorAll('.sanc-site-cb').forEach(function(cb){
+      if(cb.checked){
+        promises.push(sb.from('sanctuary_staff_sites').upsert({staff_id:cb.dataset.staff, site_id:parseInt(cb.dataset.site)},{onConflict:'staff_id,site_id'}));
+      } else {
+        promises.push(sb.from('sanctuary_staff_sites').delete().eq('staff_id',cb.dataset.staff).eq('site_id',cb.dataset.site));
+      }
+    });
+    var results = await Promise.all(promises);
+    var errRes = results.find(function(r){return r && r.error;});
+    ev.target.disabled=false; ev.target.textContent='Save changes';
+    if(errRes){ errEl.textContent = 'Save failed: '+errRes.error.message; return; }
+    var sr = await sb.from('staff').select('*').order('name');
+    allStaff = (sr.data||[]).filter(function(s){return !s.is_webmaster && s.is_active!==false;});
+    removeModal('sanc-access-modal');
+    state.flash = 'Sanctuary access updated.';
+    renderSanctuaryDashboard();
   };
 }
 
